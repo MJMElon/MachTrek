@@ -1,0 +1,36 @@
+{
+  "name": "machinery-piece-rates",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Offline-first PWA for heavy-machine operators to record piece-rate work.",
+  "scripts": {
+    "gen-icons": "node scripts/gen-icons.mjs",
+    "predev": "node scripts/gen-icons.mjs",
+    "dev": "vite",
+    "dev:https": "vite --mode https",
+    "prebuild": "node scripts/gen-icons.mjs",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dexie": "^4.0.8",
+    "dexie-react-hooks": "^1.1.7",
+    "exifr": "^7.1.3",
+    "leaflet": "^1.9.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "sharp": "^0.33.5",
+    "tailwindcss": "^3.4.13",
+    "vite": "^5.4.8",
+    "vite-plugin-pwa": "^0.20.5"
+  }
+}

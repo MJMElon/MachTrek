@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MachTrek">
+  <rect width="512" height="512" rx="112" fill="#2563eb"/>
+  <!-- Tracked excavator, facing right: white silhouette with blue cut-outs. -->
+  <!-- Scaled to 0.9 so the whole machine stays inside the maskable safe zone
+       (Android crops maskable icons to a circle ~80% of the canvas). -->
+  <g fill="#ffffff" transform="translate(256,256) scale(0.9) translate(-256,-256)">
+    <!-- boom (long, shallow) then stick (short, steep) -->
+    <path d="M280 258 L362 158" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/>
+    <path d="M362 158 L400 248" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round"/>
+    <!-- bucket, opening down and to the right -->
+    <path d="M372 244 H434 A12 12 0 0 1 446 256 V262 A54 54 0 0 1 392 316 H386 A14 14 0 0 1 372 302 Z"/>
+    <!-- house: raised cab on the left, engine deck to the right -->
+    <path d="M112 162 H186 A18 18 0 0 1 204 180 V214 H276 A18 18 0 0 1 294 232 V286
+             A18 18 0 0 1 276 304 H112 A18 18 0 0 1 94 286 V180 A18 18 0 0 1 112 162 Z"/>
+    <!-- cab window -->
+    <rect x="118" y="184" width="68" height="50" rx="12" fill="#2563eb"/>
+    <!-- tracks -->
+    <rect x="76" y="306" width="228" height="66" rx="33"/>
+    <rect x="98" y="324" width="184" height="30" rx="15" fill="#2563eb"/>
+    <circle cx="128" cy="339" r="9"/>
+    <circle cx="190" cy="339" r="9"/>
+    <circle cx="252" cy="339" r="9"/>
+  </g>
+</svg>

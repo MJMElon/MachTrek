@@ -1,0 +1,26 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.*
+!.env.example
+# .env.production holds only the PUBLIC Supabase values and is committed so the
+# GitHub Pages build works without configuring repo secrets.
+!.env.production
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+*.log
+npm-debug.log*
+
+# Generated PWA icons (regenerated from public/logo.svg via `npm run gen-icons`)
+public/pwa-192x192.png
+public/pwa-512x512.png
+public/apple-touch-icon.png
+public/favicon-32x32.png
+
+# Generated service worker / manifest
+dev-dist

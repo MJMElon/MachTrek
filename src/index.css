@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #e7edf7; /* a slightly darker, gently blue page background */
+  color: #0f172a; /* slate-900 */
+  -webkit-font-smoothing: antialiased;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Inputs at 16px avoid the iOS auto-zoom on focus. */
+input,
+select,
+textarea,
+button {
+  font-size: 16px;
+}
+
+/* Safe-area helpers for notched phones / the fixed bottom nav. */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.content-pad-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 5rem);
+}
+
+/* Printing (claim form): use the full page, white background. */
+@media print {
+  body {
+    background: #fff;
+  }
+  .max-w-app {
+    max-width: none !important;
+  }
+  .content-pad-bottom {
+    padding-bottom: 0 !important;
+  }
+}
+
+/* Native date/time fields carry a wide intrinsic size (iOS renders them as
+   "12 Aug 2026 at 11:14"), which overflows their rounded box on a phone.
+   Force them to obey the container instead. */
+input[type='datetime-local'],
+input[type='date'],
+input[type='time'] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Hide number input spinners for a cleaner look. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
