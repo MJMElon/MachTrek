@@ -4,7 +4,7 @@ import { getPhoto } from '../db/repo.js'
 import { capturePhotoMeta, getDevicePosition } from '../lib/photoMeta.js'
 import { compressImage } from '../lib/image.js'
 import { GpsSource } from '../db/models.js'
-import { dateTimeSecondsOf, formatGps, formatBytes } from '../lib/format.js'
+import { dateTimeSecondsOf, formatGps, formatBytes, toLocalInput, fromLocalInput, formatLatLng, parseLatLng } from '../lib/format.js'
 import { usePhotoUrl, Lightbox } from './PhotoThumb.jsx'
 import { IconCamera, IconPin, IconClock } from './icons.jsx'
 import { Spinner } from './ui.jsx'
@@ -36,13 +36,17 @@ export default function PhotoCapture({
   previewHeight = 'h-44', // shorter previews keep long forms scrollable
   language = 'en',
   captureLabel = null,
-  cameraOnly = false // operator flows: force the live camera, no gallery picking
+  cameraOnly = false, // operator flows: force the live camera, no gallery picking
+  editable = false // operator flows: tap the time/location rows to correct them
 }) {
   const ms = language === 'ms'
   const inputRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [detecting, setDetecting] = useState(false)
   const [zoom, setZoom] = useState(null)
+  const [editTime, setEditTime] = useState(false)
+  const [editLoc, setEditLoc] = useState(false)
+  const [locText, setLocText] = useState('') // free text while typing "lat, lng"
   // Fall back to the record's saved photo until a new one is picked.
   const saved = useLiveQuery(
     () => (existingId && !value ? getPhoto(existingId) : Promise.resolve(null)),
@@ -59,6 +63,11 @@ export default function PhotoCapture({
   }
   const tokenRef = useRef(0) // invalidates a stale in-flight detection
   const warmGpsRef = useRef(null) // device fix warmed up when the form opened
+  // The background EXIF pass must never clobber a value the operator has
+  // already corrected by hand — track manual edits per field.
+  const valueRef = useRef(null)
+  valueRef.current = value
+  const manualRef = useRef({ time: false, gps: false })
 
   // Warm up the device location as soon as the form opens, so a fix is ready by
   // capture time (and the permission prompt appears up front). Only for the full
@@ -86,6 +95,9 @@ export default function PhotoCapture({
     e.target.value = '' // allow re-selecting the same file
     if (!file) return
     const token = ++tokenRef.current
+    setEditTime(false) // a fresh photo starts from its own detected metadata
+    setEditLoc(false)
+    manualRef.current = { time: false, gps: false }
     setBusy(true)
     try {
       // Show the photo immediately with provisional metadata (current time + the
@@ -111,12 +123,15 @@ export default function PhotoCapture({
         capturePhotoMeta(file, { time: detectTime, gps: detectLocation })
           .then((meta) => {
             if (token !== tokenRef.current) return // photo replaced/removed meanwhile
+            // Merge onto whatever the operator may have edited meanwhile;
+            // hand-corrected fields win over the detected ones.
+            const cur = valueRef.current?.blob === blob ? valueRef.current : provisional
             onChange({
-              blob,
-              capturedAt: detectTime ? meta.capturedAt : provisional.capturedAt,
-              timeSource: detectTime ? meta.timeSource : provisional.timeSource,
+              ...cur,
+              capturedAt: !manualRef.current.time && detectTime ? meta.capturedAt : cur.capturedAt,
+              timeSource: !manualRef.current.time && detectTime ? meta.timeSource : cur.timeSource,
               // Keep the warmed GPS if the background pass found nothing better.
-              gps: meta.gps && meta.gps.lat != null ? meta.gps : provisional.gps
+              gps: !manualRef.current.gps && meta.gps && meta.gps.lat != null ? meta.gps : cur.gps
             })
           })
           .finally(() => {
@@ -136,7 +151,24 @@ export default function PhotoCapture({
       ? ms ? 'daripada gambar' : 'from photo'
       : value?.gps?.source === GpsSource.DEVICE
         ? ms ? 'daripada telefon' : 'from device'
-        : null
+        : value?.gps?.source === GpsSource.MANUAL
+          ? ms ? 'diubah' : 'edited'
+          : null
+
+  // Operator corrections, written straight onto the captured value.
+  function setManualTime(localValue) {
+    const iso = fromLocalInput(localValue)
+    if (!iso || !value) return
+    manualRef.current.time = true
+    onChange({ ...value, capturedAt: iso, timeSource: GpsSource.MANUAL })
+  }
+  function setManualLoc(text) {
+    setLocText(text)
+    const { lat, lng } = parseLatLng(text)
+    if (lat == null || lng == null || !value) return // keep typing — commit once valid
+    manualRef.current.gps = true
+    onChange({ ...value, gps: { lat, lng, source: GpsSource.MANUAL, accuracy: null } })
+  }
 
   // Compact square tile — used for the optional 3-up photo box on the admin forms.
   if (compact) {
@@ -244,35 +276,80 @@ export default function PhotoCapture({
               </div>
             )}
           </div>
-          <div className="space-y-1 p-3 text-sm">
+          {/* Compact metadata strip. With `editable`, tapping a row opens an
+              inline editor — no separate form fields needed. */}
+          <div className="space-y-0.5 px-2.5 py-2 text-xs">
             {detectTime && (
-              <div className="flex items-center gap-2 text-slate-600">
-                <IconClock width={15} height={15} className="text-slate-500" />
-                <span>{dateTimeSecondsOf(value.capturedAt, ms ? 'ms-MY' : undefined)}</span>
-                {value.timeSource === GpsSource.DEVICE && (
-                  <span className="text-[11px] text-amber-600">({ms ? 'masa telefon' : 'device time'})</span>
+              <>
+                <button
+                  type="button"
+                  disabled={!editable}
+                  onClick={() => setEditTime((v) => !v)}
+                  className="flex w-full items-center gap-1.5 text-left text-slate-600 disabled:pointer-events-none"
+                >
+                  <IconClock width={13} height={13} className="shrink-0 text-slate-500" />
+                  <span className="truncate">{dateTimeSecondsOf(value.capturedAt, ms ? 'ms-MY' : undefined)}</span>
+                  {value.timeSource === GpsSource.DEVICE && (
+                    <span className="shrink-0 text-[10px] text-amber-600">({ms ? 'masa telefon' : 'device time'})</span>
+                  )}
+                  {value.timeSource === GpsSource.MANUAL && (
+                    <span className="shrink-0 text-[10px] text-slate-500">({ms ? 'diubah' : 'edited'})</span>
+                  )}
+                  {editable && <span className="ml-auto shrink-0 font-medium text-brand">{ms ? 'Ubah' : 'Edit'}</span>}
+                </button>
+                {editable && editTime && (
+                  <input
+                    type="datetime-local"
+                    step="1"
+                    autoFocus
+                    value={toLocalInput(value.capturedAt)}
+                    onChange={(e) => setManualTime(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                  />
                 )}
-              </div>
+              </>
             )}
             {detectLocation && (
               <>
-                <div className="flex items-center gap-2 text-slate-600">
-                  <IconPin width={15} height={15} className={gpsOk ? 'text-slate-500' : 'text-red-400'} />
-                  <span className={gpsOk ? '' : 'text-red-500'}>{gpsOk ? formatGps(value.gps) : ms ? 'Tiada lokasi' : formatGps(value.gps)}</span>
-                  {sourceLabel && <span className="text-[11px] text-slate-500">({sourceLabel})</span>}
-                </div>
-                {!gpsOk && (
-                  <p className="text-[11px] text-red-500">
+                <button
+                  type="button"
+                  disabled={!editable}
+                  onClick={() => {
+                    setLocText(gpsOk ? formatLatLng(value.gps.lat, value.gps.lng) : '')
+                    setEditLoc((v) => !v)
+                  }}
+                  className="flex w-full items-center gap-1.5 text-left text-slate-600 disabled:pointer-events-none"
+                >
+                  <IconPin width={13} height={13} className={`shrink-0 ${gpsOk ? 'text-slate-500' : 'text-red-400'}`} />
+                  <span className={`truncate ${gpsOk ? '' : 'text-red-500'}`}>
+                    {gpsOk ? formatGps(value.gps) : ms ? 'Tiada lokasi' : formatGps(value.gps)}
+                  </span>
+                  {sourceLabel && <span className="shrink-0 text-[10px] text-slate-500">({sourceLabel})</span>}
+                  {editable && <span className="ml-auto shrink-0 font-medium text-brand">{ms ? 'Ubah' : 'Edit'}</span>}
+                </button>
+                {editable && editLoc && (
+                  <input
+                    type="text"
+                    autoFocus
+                    inputMode="decimal"
+                    value={locText}
+                    onChange={(e) => setManualLoc(e.target.value)}
+                    placeholder={ms ? 'cth. 3.13921, 101.6869' : 'e.g. 3.13921, 101.6869'}
+                    className="h-10 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                  />
+                )}
+                {!gpsOk && !editLoc && (
+                  <p className="text-[10px] text-red-500">
                     {ms ? 'Lokasi tiada. Benarkan akses lokasi.' : 'No location found. Allow location access, or upload a photo that has GPS.'}
                   </p>
                 )}
               </>
             )}
             {detecting && (
-              <p className="text-[11px] text-slate-500">{ms ? 'Membaca tarikh dan lokasi…' : 'Reading date & location…'}</p>
+              <p className="text-[10px] text-slate-500">{ms ? 'Membaca tarikh dan lokasi…' : 'Reading date & location…'}</p>
             )}
             {value.blob?.size != null && (
-              <p className="text-[11px] text-slate-500">{ms ? 'Saiz' : 'Upload size'} ≈ {formatBytes(value.blob.size)}</p>
+              <p className="text-[10px] text-slate-500">{ms ? 'Saiz' : 'Upload size'} ≈ {formatBytes(value.blob.size)}</p>
             )}
           </div>
           <div className="flex border-t border-slate-100">

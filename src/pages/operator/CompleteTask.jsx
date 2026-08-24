@@ -20,24 +20,17 @@ import { isDistanceUnit, isDayUnit, DAY_QTY_CHOICES } from '../../lib/dashboard.
 
 // Code-split: Leaflet only loads when an operator actually opens the map.
 const DistanceRecorder = lazy(() => import('../../components/DistanceRecorder.jsx'))
-import { TaskStatus, GpsSource } from '../../db/models.js'
+import { TaskStatus } from '../../db/models.js'
 import { minutesBetween, formatHours } from '../../lib/duration.js'
-import { timeOf, dateTimeOf, formatMoney, formatRate, toLocalInput, fromLocalInput, formatLatLng, parseLatLng } from '../../lib/format.js'
+import { timeOf, dateTimeOf, formatMoney, formatRate } from '../../lib/format.js'
 import { QuantityInput } from '../../components/QuantityInput.jsx'
 import { evalExpr, isExpression } from '../../lib/expr.js'
 import { requestSync } from '../../sync/syncEngine.js'
-
-const geoFor = (loc, fallback) => {
-  const { lat, lng } = parseLatLng(loc)
-  if (lat == null && lng == null) return fallback || undefined
-  const changed = lat !== (fallback?.lat ?? null) || lng !== (fallback?.lng ?? null)
-  return { lat, lng, source: changed ? GpsSource.MANUAL : fallback?.source || GpsSource.DEVICE, accuracy: fallback?.accuracy ?? null }
-}
 import { getMeta } from '../../db/database.js'
 import PhotoCapture from '../../components/PhotoCapture.jsx'
 import { Lightbox, PhotoById } from '../../components/PhotoThumb.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
-import { Button, Card, Field, TextInput, TextArea, Select, Spinner } from '../../components/ui.jsx'
+import { Button, Card, Field, TextArea, Select, Spinner } from '../../components/ui.jsx'
 
 export default function CompleteTask() {
   const { id } = useParams()
@@ -53,10 +46,6 @@ export default function CompleteTask() {
 
   const [endWorkPhoto, setEndWorkPhoto] = useState(null)
   const [endPhoto, setEndPhoto] = useState(null)
-  const [endTime, setEndTime] = useState('')
-  const [timeTouched, setTimeTouched] = useState(false)
-  const [endLoc, setEndLoc] = useState('')
-  const [locTouched, setLocTouched] = useState(false)
   const [machineId, setMachineId] = useState('')
   const [rateId, setRateId] = useState('')
   const [quantity, setQuantity] = useState('')
@@ -94,18 +83,13 @@ export default function CompleteTask() {
   )
 
   // End time comes from the ending meter photo only (the true end-of-work
-  // moment), not the proof-of-work photo.
-  const suggested = endPhoto?.capturedAt || null
-  useEffect(() => {
-    if (!timeTouched && suggested) setEndTime(toLocalInput(suggested))
-  }, [suggested, timeTouched])
-
-  // Pre-fill the location from an end photo's GPS, until edited by hand.
-  useEffect(() => {
-    if (locTouched) return
-    const g = (endPhoto?.gps?.lat != null && endPhoto.gps) || (endWorkPhoto?.gps?.lat != null && endWorkPhoto.gps) || null
-    if (g) setEndLoc(formatLatLng(g.lat, g.lng))
-  }, [endPhoto, endWorkPhoto, locTouched])
+  // moment), not the proof-of-work photo. The operator corrects time/location
+  // right under the photo (PhotoCapture `editable`) — no separate form fields.
+  const endISO = endPhoto?.capturedAt || task?.endTime || null
+  const endGpsVal =
+    (endPhoto?.gps?.lat != null && endPhoto.gps) ||
+    (endWorkPhoto?.gps?.lat != null && endWorkPhoto.gps) ||
+    undefined // repo falls back to the task's saved endGps
 
   // Resume a saved draft: fill the form (once) from whatever was saved on the
   // task. Photos re-hydrate from their stored rows on this device.
@@ -117,14 +101,6 @@ export default function CompleteTask() {
     else if (task.quantity != null) setQuantity(String(task.quantity))
     if (task.areaId) setAreaId(task.areaId)
     if (task.notes) setNotes(task.notes)
-    if (task.endTime) {
-      setTimeTouched(true)
-      setEndTime(toLocalInput(task.endTime))
-    }
-    if (task.endGps?.lat != null) {
-      setLocTouched(true)
-      setEndLoc(formatLatLng(task.endGps.lat, task.endGps.lng))
-    }
     ;(async () => {
       if (task.endWorkPhotoId) {
         const p = await getPhoto(task.endWorkPhotoId)
@@ -207,8 +183,7 @@ export default function CompleteTask() {
     }
   }, [qtyLocked, trackTotal])
 
-  const endISO = fromLocalInput(endTime)
-  const durationMins = task ? minutesBetween(task.startTime, endISO) : null
+  const durationMins = task && endISO ? minutesBetween(task.startTime, endISO) : null
   const qtyNum = evalExpr(quantity)
   const amount = rate && qtyNum != null ? qtyNum * Number(rate.price) : null
 
@@ -217,13 +192,14 @@ export default function CompleteTask() {
   // lost, even with no connection. After each save we request a sync, which
   // pushes to the server when online and simply stays queued when offline.
   const draft = {
-    endTime: endTime ? endISO : null,
+    endTime: endISO,
     // Only pass photos that carry new bytes; already-saved ones keep their ids.
+    // An edited time/GPS makes a new object (same blob), so it re-saves too.
     endWorkPhoto: endWorkPhoto?.blob && endWorkPhoto !== savedWork.current ? endWorkPhoto : null,
     endPhoto: endPhoto?.blob && endPhoto !== savedMeter.current ? endPhoto : null,
     removeEndWorkPhoto: removedWork.current,
     removeEndPhoto: removedMeter.current,
-    endGps: geoFor(endLoc, endPhoto?.gps || endWorkPhoto?.gps),
+    endGps: endGpsVal,
     machine,
     company,
     pieceRate: rate,
@@ -266,7 +242,7 @@ export default function CompleteTask() {
     if (!hydrated.current) return
     const timer = setTimeout(() => saveDraftRef.current?.(), 250)
     return () => clearTimeout(timer)
-  }, [endTime, endLoc, endWorkPhoto, endPhoto, machineId, rateId, quantity, areaId, notes])
+  }, [endWorkPhoto, endPhoto, machineId, rateId, quantity, areaId, notes])
 
   // Also flush the moment the page is hidden or closed — mobile browsers freeze
   // or kill a backgrounded PWA before an unmount would run, which is exactly when
@@ -308,7 +284,7 @@ export default function CompleteTask() {
   // Area is only required when the admin has set up areas for this company;
   // otherwise it's optional. Piece rate + quantity are always optional.
   const areaRequired = (areas || []).length > 0
-  const canSave = endWorkPhoto && endPhoto && endTime && machineId && (!areaRequired || areaId)
+  const canSave = endWorkPhoto && endPhoto && endISO && machineId && (!areaRequired || areaId)
 
   async function submit(e) {
     e.preventDefault()
@@ -338,7 +314,7 @@ export default function CompleteTask() {
         endTime: endISO,
         endWorkPhoto,
         endPhoto,
-        endGps: geoFor(endLoc, endPhoto?.gps || endWorkPhoto?.gps),
+        endGps: endGpsVal,
         machine,
         company,
         pieceRate: rate,
@@ -540,12 +516,14 @@ export default function CompleteTask() {
           </Card>
         )}
 
-        {/* End-of-task evidence — kept last, right before Complete */}
+        {/* End-of-task evidence — kept last, right before Complete. Time and
+            location live under the photos themselves (tap a row to correct). */}
         <PhotoCapture
           language="ms"
           label="Bukti kerja"
           required
           cameraOnly
+          editable
           value={endWorkPhoto}
           onChange={onEndWorkPhoto}
           detectTime={false}
@@ -556,39 +534,17 @@ export default function CompleteTask() {
           label="Gambar meter akhir"
           required
           cameraOnly
+          editable
           value={endPhoto}
           onChange={onEndPhoto}
           previewHeight="h-28"
         />
 
-        <Card className="space-y-4 p-4">
-          <Field label="Masa tamat" required>
-            <TextInput
-              type="datetime-local"
-              step="1"
-              value={endTime}
-              onChange={(e) => {
-                setTimeTouched(true)
-                setEndTime(e.target.value)
-              }}
-            />
-          </Field>
-          <Field label="Lokasi tamat">
-            <TextInput
-              value={endLoc}
-              onChange={(e) => {
-                setLocTouched(true)
-                setEndLoc(e.target.value)
-              }}
-              placeholder="cth. 3.13921, 101.6869"
-            />
-          </Field>
-          <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-            <span className="text-sm text-slate-500">Tempoh</span>
-            <span className="text-lg font-bold text-slate-800">
-              {formatHours(durationMins)}
-            </span>
-          </div>
+        <Card className="flex items-center justify-between p-3">
+          <span className="text-sm text-slate-500">Tempoh</span>
+          <span className="text-lg font-bold text-slate-800">
+            {formatHours(durationMins)}
+          </span>
         </Card>
 
         {error && <p className="text-sm text-red-500">{error}</p>}

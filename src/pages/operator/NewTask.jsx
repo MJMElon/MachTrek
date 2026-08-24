@@ -1,19 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import { startTask } from '../../db/repo.js'
-import { GpsSource } from '../../db/models.js'
-import { toLocalInput, fromLocalInput, formatLatLng, parseLatLng } from '../../lib/format.js'
-
-const geoFor = (loc, fallback) => {
-  const { lat, lng } = parseLatLng(loc)
-  if (lat == null && lng == null) return fallback || undefined
-  const changed = lat !== (fallback?.lat ?? null) || lng !== (fallback?.lng ?? null)
-  return { lat, lng, source: changed ? GpsSource.MANUAL : fallback?.source || GpsSource.DEVICE, accuracy: fallback?.accuracy ?? null }
-}
 import PhotoCapture from '../../components/PhotoCapture.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
-import { Button, Card, Field, TextInput, TextArea } from '../../components/ui.jsx'
+import { Button, Card, Field, TextArea } from '../../components/ui.jsx'
 import { IconPlus } from '../../components/icons.jsx'
 
 export default function NewTask() {
@@ -25,35 +16,23 @@ export default function NewTask() {
   // Photo 2 is optional and rarely used — keep the form short by hiding it
   // behind a thin button until the operator asks for it.
   const [showPhoto2, setShowPhoto2] = useState(false)
-  const [startTime, setStartTime] = useState('')
-  const [timeTouched, setTimeTouched] = useState(false)
-  const [startLoc, setStartLoc] = useState('')
-  const [locTouched, setLocTouched] = useState(false)
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const submitting = useRef(false) // synchronous double-submit guard
 
   // Start time + location come from the meter photo (photo 1) only — photo 2 is
-  // an optional extra and shouldn't drive them.
-  const suggested = photo1?.capturedAt || null
-  useEffect(() => {
-    if (!timeTouched && suggested) setStartTime(toLocalInput(suggested))
-  }, [suggested, timeTouched])
-
-  useEffect(() => {
-    if (locTouched) return
-    if (photo1?.gps?.lat != null) setStartLoc(formatLatLng(photo1.gps.lat, photo1.gps.lng))
-  }, [photo1, locTouched])
-
-  const canSave = photo1 && startTime
+  // an optional extra and shouldn't drive them. The operator can correct both
+  // right under the photo (PhotoCapture `editable`), so there are no separate
+  // time/location form fields here.
+  const canSave = photo1?.capturedAt
 
   async function submit(e) {
     e.preventDefault()
     if (submitting.current) return
     setError('')
     if (!canSave) {
-      setError('Tambah gambar meter dan masa mula.')
+      setError('Tambah gambar meter.')
       return
     }
     submitting.current = true
@@ -61,8 +40,8 @@ export default function NewTask() {
     try {
       await startTask({
         session: user, // carries companyId/companyName/machineId/machineName/operatorName
-        startTime: fromLocalInput(startTime),
-        startGps: geoFor(startLoc, photo1?.gps),
+        startTime: photo1.capturedAt,
+        startGps: photo1.gps,
         notes,
         startPhoto: photo1,
         workPhoto: photo2
@@ -91,6 +70,7 @@ export default function NewTask() {
           captureLabel="Ambil gambar meter mula"
           required
           cameraOnly
+          editable
           value={photo1}
           onChange={setPhoto1}
         />
@@ -117,28 +97,7 @@ export default function NewTask() {
           </button>
         )}
 
-        <Card className="space-y-3 p-4">
-          <Field label="Masa mula" required>
-            <TextInput
-              type="datetime-local"
-              step="1"
-              value={startTime}
-              onChange={(e) => {
-                setTimeTouched(true)
-                setStartTime(e.target.value)
-              }}
-            />
-          </Field>
-          <Field label="Lokasi mula">
-            <TextInput
-              value={startLoc}
-              onChange={(e) => {
-                setLocTouched(true)
-                setStartLoc(e.target.value)
-              }}
-              placeholder="cth. 3.13921, 101.6869"
-            />
-          </Field>
+        <Card className="p-4">
           <Field label="Catatan">
             <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>

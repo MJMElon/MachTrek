@@ -17,7 +17,7 @@ import { uuid } from '../lib/uuid.js'
 import { dayKeyOf, monthKeyOf, minRetainedMonthKey } from '../lib/format.js'
 import { isDistanceUnit } from '../lib/dashboard.js'
 import { minutesBetween } from '../lib/duration.js'
-import { hashPin, pinHashCandidates } from '../lib/crypto.js'
+import { hashPin, normalizePin, pinHashCandidates } from '../lib/crypto.js'
 import { emitChange } from '../sync/bus.js'
 
 const nowISO = () => new Date().toISOString()
@@ -997,7 +997,13 @@ export async function setOperatorPin(id, pin) {
 export async function operatorUsingPin(pin, exceptId = null) {
   const hashes = await pinHashCandidates(pin)
   const all = await db.operators.toArray()
-  return all.find((o) => o.id !== exceptId && hashes.includes(o.pinHash)) || null
+  return (
+    all.find(
+      (o) =>
+        o.id !== exceptId &&
+        (hashes.includes(o.pinHash) || (o.pin && normalizePin(o.pin) === normalizePin(pin)))
+    ) || null
+  )
 }
 
 export async function deleteOperator(id) {

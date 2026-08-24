@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { db } from '../db/database.js'
 import { Role } from '../db/models.js'
-import { pinHashCandidates } from '../lib/crypto.js'
+import { normalizePin, pinHashCandidates } from '../lib/crypto.js'
 import { supabase, supabaseEnabled } from '../sync/supabase.js'
 
 // Operator / site-admin sessions are local (offline-first). The HQ admin is a
@@ -94,13 +94,17 @@ export function AuthProvider({ children }) {
   const loginOperator = useCallback(
     async ({ username, pin, expect }) => {
       const all = await db.operators.toArray()
-      // PINs match case-insensitively (legacy as-typed hashes still accepted).
+      // PINs match case-insensitively. The hash covers new-style (lowercased)
+      // and as-typed entries; the stored plain PIN covers records whose hash
+      // predates the case-insensitive rule (e.g. legacy "Ab12" vs typed "ab12").
       const pinHashes = await pinHashCandidates(pin)
+      const pinMatches = (o) =>
+        pinHashes.includes(o.pinHash) || (o.pin && normalizePin(o.pin) === normalizePin(pin))
       let op
       if (expect === 'operator') {
         // Match the PIN against every active operator (site admins use their
         // own login, so they are excluded from the PIN-only lookup).
-        const matches = all.filter((o) => o.active && !o.isSiteAdmin && pinHashes.includes(o.pinHash))
+        const matches = all.filter((o) => o.active && !o.isSiteAdmin && pinMatches(o))
         if (matches.length > 1) throw new Error('This PIN is used by more than one operator. Ask the admin.')
         op = matches[0]
         if (!op) throw new Error('Incorrect PIN.')
@@ -111,7 +115,7 @@ export function AuthProvider({ children }) {
         // Check the username first, then the PIN.
         if (!op) throw new Error('Username does not exist.')
         if (!op.pinHash) throw new Error('No PIN set yet. Ask the admin.')
-        if (!pinHashes.includes(op.pinHash)) throw new Error('Incorrect PIN.')
+        if (!pinMatches(op)) throw new Error('Incorrect PIN.')
         if (!op.isSiteAdmin) throw new Error('This is not a site-admin account. Use the Operator login.')
       }
       const company = op.companyId ? await db.companies.get(op.companyId) : null
