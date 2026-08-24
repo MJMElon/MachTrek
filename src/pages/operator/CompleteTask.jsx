@@ -545,6 +545,7 @@ export default function CompleteTask() {
           language="ms"
           label="Bukti kerja"
           required
+          cameraOnly
           value={endWorkPhoto}
           onChange={onEndWorkPhoto}
           detectTime={false}
@@ -554,6 +555,7 @@ export default function CompleteTask() {
           language="ms"
           label="Gambar meter akhir"
           required
+          cameraOnly
           value={endPhoto}
           onChange={onEndPhoto}
           previewHeight="h-28"

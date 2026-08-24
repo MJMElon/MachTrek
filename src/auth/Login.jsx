@@ -66,11 +66,9 @@ function OperatorLogin({ onBack, kind }) {
       await auth.loginOperator({ username, pin, expect: kind })
     } catch (err) {
       const operatorErrors = {
-        'Enter your username.': 'Masukkan nama pengguna.',
-        'Username does not exist.': 'Nama pengguna tidak dijumpai.',
-        'No PIN set yet. Ask the admin.': 'PIN belum ditetapkan. Hubungi admin.',
         'Incorrect PIN.': 'PIN salah.',
-        'This is a site-admin account. Use the Site Admin login.': 'Ini akaun Admin Tapak.'
+        'This PIN is used by more than one operator. Ask the admin.':
+          'PIN ini digunakan oleh lebih daripada seorang operator. Hubungi admin.'
       }
       setError(ms ? operatorErrors[err.message] || 'Gagal log masuk.' : err.message)
       setPin('')
@@ -85,17 +83,21 @@ function OperatorLogin({ onBack, kind }) {
         <p className="text-sm font-semibold text-slate-700">
           {kind === 'siteadmin' ? 'Site admin sign in' : 'Log masuk operator'}
         </p>
-        <Field label={ms ? 'Nama pengguna' : 'Username'} required>
-          <TextInput
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder={ms ? 'nama pengguna' : 'your username'}
-            autoFocus
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-          />
-        </Field>
+        {/* Operators log in with just their PIN (unique per operator);
+            site admins still identify themselves by username. */}
+        {kind === 'siteadmin' && (
+          <Field label="Username" required>
+            <TextInput
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="your username"
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </Field>
+        )}
         <Field label="PIN" required error={error}>
           {/* Full keyboard — PINs may contain letters, not just digits. */}
           <TextInput
@@ -103,13 +105,14 @@ function OperatorLogin({ onBack, kind }) {
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
+            autoFocus={ms}
             value={pin}
             onChange={(e) => setPin(e.target.value)}
             placeholder="••••"
             className="text-center text-2xl tracking-[0.5em]"
           />
         </Field>
-        <Button full type="submit" disabled={busy || !username.trim() || pin.length < 3}>
+        <Button full type="submit" disabled={busy || (!ms && !username.trim()) || pin.length < 3}>
           {busy ? (ms ? 'Menyemak…' : 'Checking…') : (ms ? 'Log masuk' : 'Sign in')}
         </Button>
         <Button type="button" variant="ghost" full onClick={onBack}>

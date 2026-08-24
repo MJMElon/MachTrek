@@ -11,8 +11,9 @@ import { Spinner } from './ui.jsx'
 
 /**
  * Capture one photo. A single "Take photo" button opens the device's native
- * chooser, which offers BOTH the camera and uploading from phone storage
- * (we deliberately omit the `capture` attribute so the user can pick either).
+ * chooser, which offers BOTH the camera and uploading from phone storage —
+ * unless `cameraOnly` is set (operator flows), which forces the live camera so
+ * photos are taken on the spot, not picked from the gallery.
  * The photo's timestamp (to the second) + GPS are read from its EXIF, falling
  * back to the live device GPS/clock only when the file has none.
  *
@@ -34,7 +35,8 @@ export default function PhotoCapture({
   confirmReplace = false,
   previewHeight = 'h-44', // shorter previews keep long forms scrollable
   language = 'en',
-  captureLabel = null
+  captureLabel = null,
+  cameraOnly = false // operator flows: force the live camera, no gallery picking
 }) {
   const ms = language === 'ms'
   const inputRef = useRef(null)
@@ -192,8 +194,16 @@ export default function PhotoCapture({
         </p>
       )}
 
-      {/* No `capture` attr => native sheet offers Camera + Photo Library + Files */}
-      <input ref={inputRef} type="file" accept="image/*" hidden onChange={handleFile} />
+      {/* `capture` forces the live camera; without it the native sheet offers
+          Camera + Photo Library + Files. */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        {...(cameraOnly ? { capture: 'environment' } : {})}
+        hidden
+        onChange={handleFile}
+      />
 
       {!value ? (
         <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-4">
@@ -210,7 +220,11 @@ export default function PhotoCapture({
             >
               <IconCamera width={28} height={28} />
               <span className="text-base font-medium">{captureLabel || (ms ? 'Ambil gambar' : 'Take photo')}</span>
-              <span className="text-[11px] text-white/80">{ms ? 'Kamera atau galeri' : 'Camera or upload from phone'}</span>
+              <span className="text-[11px] text-white/80">
+                {cameraOnly
+                  ? ms ? 'Kamera sahaja' : 'Camera only'
+                  : ms ? 'Kamera atau galeri' : 'Camera or upload from phone'}
+              </span>
             </button>
           )}
           {hint && <p className="mt-2 text-center text-xs text-slate-500">{hint}</p>}

@@ -17,7 +17,7 @@ import { uuid } from '../lib/uuid.js'
 import { dayKeyOf, monthKeyOf, minRetainedMonthKey } from '../lib/format.js'
 import { isDistanceUnit } from '../lib/dashboard.js'
 import { minutesBetween } from '../lib/duration.js'
-import { hashSecret } from '../lib/crypto.js'
+import { hashPin, pinHashCandidates } from '../lib/crypto.js'
 import { emitChange } from '../sync/bus.js'
 
 const nowISO = () => new Date().toISOString()
@@ -984,9 +984,20 @@ export async function upsertOperator(input) {
 
 /** Set an operator's PIN (stores it plain for admin viewing + a hash for login). */
 export async function setOperatorPin(id, pin) {
-  const pinHash = await hashSecret(pin)
+  const pinHash = await hashPin(pin) // case-insensitive: hash of the lowercased PIN
   await db.operators.update(id, { pin, pinHash, updatedAt: nowISO(), syncStatus: SyncStatus.PENDING })
   emitChange()
+}
+
+/**
+ * The operator (if any) other than `exceptId` already using this PIN.
+ * Operators log in with the PIN alone, so PINs must be unique across everyone
+ * (case-insensitively; legacy as-typed hashes are checked too).
+ */
+export async function operatorUsingPin(pin, exceptId = null) {
+  const hashes = await pinHashCandidates(pin)
+  const all = await db.operators.toArray()
+  return all.find((o) => o.id !== exceptId && hashes.includes(o.pinHash)) || null
 }
 
 export async function deleteOperator(id) {

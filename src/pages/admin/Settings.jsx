@@ -23,6 +23,7 @@ import {
   listOperators,
   upsertOperator,
   setOperatorPin,
+  operatorUsingPin,
   deleteOperator
 } from '../../db/repo.js'
 import PageHeader from '../../components/PageHeader.jsx'
@@ -573,6 +574,11 @@ function OperatorEditor({ editing, companyId, machines, onClose }) {
     if (!name.trim()) return setError('Enter a username.')
     if (pin && pin.length < 4) return setError('PIN must be at least 4 digits.')
     if (isNew && !pin) return setError('Set a PIN so the operator can log in.')
+    // Operators sign in with the PIN alone, so it must identify exactly one person.
+    if (pin && pin !== (item?.pin || '')) {
+      const taken = await operatorUsingPin(pin, item?.id ?? null)
+      if (taken) return setError(`PIN already used by "${taken.name}". Choose a different PIN.`)
+    }
     try {
       const validIds = machineIds.filter((id) => machines.some((m) => m.id === id))
       const saved = await upsertOperator({
@@ -602,14 +608,14 @@ function OperatorEditor({ editing, companyId, machines, onClose }) {
   return (
     <Modal open={open} onClose={onClose} title={isNew ? 'New operator' : 'Edit operator'}>
       <div className="space-y-3">
-        <Field label="Username" required hint="Typed at login (not case-sensitive)" error={error}>
+        <Field label="Username" required hint="Shown on records; site admins type it at login" error={error}>
           <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. ahmad" autoFocus autoCapitalize="none" />
         </Field>
         <label className="flex items-center gap-2 rounded-lg bg-brand-light px-2 py-2 text-sm text-brand-dark">
           <input type="checkbox" checked={isSiteAdmin} onChange={(e) => setIsSiteAdmin(e.target.checked)} />
           Site admin — can add &amp; edit this company&apos;s tasks
         </label>
-        <Field label="PIN" required={isNew} hint="Operators type this to log in">
+        <Field label="PIN" required={isNew} hint="Operators log in with just this PIN — must be unique">
           <div className="relative">
             <TextInput
               type={showPin ? 'text' : 'password'}

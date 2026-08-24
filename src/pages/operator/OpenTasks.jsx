@@ -17,8 +17,8 @@ export default function OpenTasks() {
     <div className="space-y-3 pb-4">
       <h1 className="text-lg font-bold text-slate-800">Kerja aktif</h1>
 
-      <Button full onClick={() => navigate('/open/new')}>
-        <IconPlus width={18} height={18} /> Mula kerja
+      <Button full size="lg" onClick={() => navigate('/open/new')}>
+        <IconPlus width={20} height={20} /> Mula kerja
       </Button>
 
       {tasks && tasks.length === 0 && (

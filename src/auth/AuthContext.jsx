@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { db } from '../db/database.js'
 import { Role } from '../db/models.js'
-import { verifySecret } from '../lib/crypto.js'
+import { pinHashCandidates } from '../lib/crypto.js'
 import { supabase, supabaseEnabled } from '../sync/supabase.js'
 
 // Operator / site-admin sessions are local (offline-first). The HQ admin is a
@@ -88,22 +88,31 @@ export function AuthProvider({ children }) {
     // onAuthStateChange sets the admin user.
   }, [])
 
-  // Operator / site-admin login: username (case-insensitive) + PIN, fully local.
+  // Operator login: PIN only (the PIN identifies the operator, so PINs must be
+  // unique — Settings enforces that). Site-admin login: username + PIN. Both
+  // are fully local.
   const loginOperator = useCallback(
     async ({ username, pin, expect }) => {
-      const uname = (username || '').trim().toLowerCase()
-      if (!uname) throw new Error('Enter your username.')
       const all = await db.operators.toArray()
-      const op = all.find((o) => o.active && (o.name || '').trim().toLowerCase() === uname)
-      // Check the username first, then the PIN.
-      if (!op) throw new Error('Username does not exist.')
-      if (!op.pinHash) throw new Error('No PIN set yet. Ask the admin.')
-      if (!(await verifySecret(pin, op.pinHash))) throw new Error('Incorrect PIN.')
-      if (expect === 'siteadmin' && !op.isSiteAdmin) {
-        throw new Error('This is not a site-admin account. Use the Operator login.')
-      }
-      if (expect === 'operator' && op.isSiteAdmin) {
-        throw new Error('This is a site-admin account. Use the Site Admin login.')
+      // PINs match case-insensitively (legacy as-typed hashes still accepted).
+      const pinHashes = await pinHashCandidates(pin)
+      let op
+      if (expect === 'operator') {
+        // Match the PIN against every active operator (site admins use their
+        // own login, so they are excluded from the PIN-only lookup).
+        const matches = all.filter((o) => o.active && !o.isSiteAdmin && pinHashes.includes(o.pinHash))
+        if (matches.length > 1) throw new Error('This PIN is used by more than one operator. Ask the admin.')
+        op = matches[0]
+        if (!op) throw new Error('Incorrect PIN.')
+      } else {
+        const uname = (username || '').trim().toLowerCase()
+        if (!uname) throw new Error('Enter your username.')
+        op = all.find((o) => o.active && (o.name || '').trim().toLowerCase() === uname)
+        // Check the username first, then the PIN.
+        if (!op) throw new Error('Username does not exist.')
+        if (!op.pinHash) throw new Error('No PIN set yet. Ask the admin.')
+        if (!pinHashes.includes(op.pinHash)) throw new Error('Incorrect PIN.')
+        if (!op.isSiteAdmin) throw new Error('This is not a site-admin account. Use the Operator login.')
       }
       const company = op.companyId ? await db.companies.get(op.companyId) : null
       persistOp({

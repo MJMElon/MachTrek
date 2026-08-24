@@ -22,6 +22,23 @@ export async function verifySecret(value, hash) {
   return timingSafeEqual(h, hash)
 }
 
+/**
+ * PINs are case-insensitive (they may contain letters, and phone keyboards
+ * auto-capitalize). New hashes are of the lowercased PIN; `pinHashCandidates`
+ * also returns the as-typed hash so PINs stored before this rule still match.
+ */
+export const normalizePin = (pin) => String(pin ?? '').trim().toLowerCase()
+
+export async function hashPin(pin) {
+  return hashSecret(normalizePin(pin))
+}
+
+export async function pinHashCandidates(pin) {
+  const norm = await hashPin(pin)
+  const raw = await hashSecret(String(pin ?? ''))
+  return norm === raw ? [norm] : [norm, raw]
+}
+
 function timingSafeEqual(a, b) {
   if (a.length !== b.length) return false
   let r = 0

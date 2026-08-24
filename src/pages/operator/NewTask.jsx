@@ -90,6 +90,7 @@ export default function NewTask() {
           label="Gambar meter"
           captureLabel="Ambil gambar meter mula"
           required
+          cameraOnly
           value={photo1}
           onChange={setPhoto1}
         />
@@ -97,6 +98,7 @@ export default function NewTask() {
           <PhotoCapture
             language="ms"
             label="Gambar tambahan"
+            cameraOnly
             value={photo2}
             onChange={(p) => {
               setPhoto2(p)
