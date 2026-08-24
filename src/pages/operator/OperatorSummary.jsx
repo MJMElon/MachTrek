@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from '../../auth/AuthContext.jsx'
-import { getCompany, getMonthTasks, listTracks } from '../../db/repo.js'
+import { getCompany, getMonthTasks, listTracks, getOperator, listOperatorMachines, listPieceRates, kerjaJamRate } from '../../db/repo.js'
 import { getMeta } from '../../db/database.js'
 import { monthKeyOf, monthLabel } from '../../lib/format.js'
 import MonthSummary from '../../components/MonthSummary.jsx'
@@ -30,6 +30,36 @@ export default function OperatorSummary() {
   )
   const company = useLiveQuery(() => getCompany(user.companyId), [user.companyId], null)
   const currency = useLiveQuery(() => getMeta('currency', 'RM'), [], 'RM')
+
+  // The piece rates this operator can earn (their machines' rates + Kerja jam),
+  // shown as a reference list under the month total.
+  const rates = useLiveQuery(
+    async () => {
+      const [op, machines] = await Promise.all([
+        getOperator(user.operatorId),
+        listOperatorMachines(user.operatorId)
+      ])
+      const out = []
+      const kj = kerjaJamRate(op)
+      if (kj.price > 0) out.push({ ...kj, machineName: null })
+      for (const m of machines) {
+        const rs = await listPieceRates({ machineId: m.id })
+        for (const r of rs) {
+          out.push({
+            id: r.id,
+            name: r.name,
+            unit: r.unit,
+            price: r.price,
+            // Only label the machine when it disambiguates.
+            machineName: machines.length > 1 ? m.name : null
+          })
+        }
+      }
+      return out
+    },
+    [user.operatorId],
+    []
+  )
 
   const mapFocus = (() => {
     for (let i = (tasks || []).length - 1; i >= 0; i--) {
@@ -62,6 +92,7 @@ export default function OperatorSummary() {
         onMonthChange={setMonthKey}
         currency={currency}
         onOpenClick={(t) => navigate(`/open/${t.id}`)}
+        rates={rates}
         language="ms"
       />
 

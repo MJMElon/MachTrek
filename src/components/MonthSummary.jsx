@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { buildMonthlySummary } from '../lib/summary.js'
-import { monthLabel, shiftMonth, monthKeyOf, minRetainedMonthKey, formatMoney, formatQty, timeOf } from '../lib/format.js'
+import { monthLabel, shiftMonth, monthKeyOf, minRetainedMonthKey, formatMoney, formatRate, formatQty, timeOf } from '../lib/format.js'
 import { formatHours } from '../lib/duration.js'
 import { Card, Badge, EmptyState } from './ui.jsx'
 import { IconChevron, IconWarning } from './icons.jsx'
@@ -26,6 +26,8 @@ function createdByBadge(createdBy, ms = false) {
  *   showOperator  - include operator name on records (admin)
  *   onRecordClick - (task) => void; if set, records are tappable (admin edit)
  *   onOpenClick   - (task) => void; tap a hanging task
+ *   rates         - optional [{id, name, unit, price, machineName}] shown as a
+ *                   reference card under the total box
  */
 export default function MonthSummary({
   tasks,
@@ -35,16 +37,20 @@ export default function MonthSummary({
   showOperator = false,
   onRecordClick,
   onOpenClick,
+  rates = null,
   language = 'en'
 }) {
   const ms = language === 'ms'
   const summary = buildMonthlySummary(tasks || [], monthKey)
   const atCurrent = monthKey >= thisMonth()
   const atFloor = monthKey <= minRetainedMonthKey() // 3-year retention limit
+  // The daily list lives INSIDE the total box, hidden until tapped — the box
+  // stays a small at-a-glance card; the detail is one tap away.
+  const [showDays, setShowDays] = useState(false)
 
   return (
     <div className="space-y-3">
-      {/* Month navigator + total */}
+      {/* Month navigator + total (tap to expand the daily list) */}
       <Card className="p-4">
         <div className="flex items-center justify-between">
           <button
@@ -83,7 +89,73 @@ export default function MonthSummary({
             </>
           )}
         </div>
+
+        {/* Deliberately in simple Malay for everyone: the total is an estimate
+            of piece-rate work only — not the final pay. */}
+        <p className="mt-2 text-center text-[11px] text-slate-500">
+          Jumlah ini anggaran upah kerja sahaja. Ia boleh berubah dan tidak termasuk elaun lain.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setShowDays((v) => !v)}
+          className="mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-sm font-medium text-brand active:bg-slate-50"
+        >
+          {ms
+            ? showDays ? 'Tutup senarai harian' : 'Lihat senarai harian'
+            : showDays ? 'Hide daily list' : 'View daily list'}
+          <IconChevron
+            width={16}
+            height={16}
+            className={`transition-transform ${showDays ? '-rotate-90' : 'rotate-90'}`}
+          />
+        </button>
+
+        {showDays && (
+          <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
+            {summary.days.length === 0 ? (
+              <EmptyState
+                title={ms ? 'Tiada kerja siap bulan ini' : 'No completed work this month'}
+                subtitle={ms ? 'Rekod siap akan dipaparkan di sini.' : 'Finished records will appear here, grouped by day.'}
+              />
+            ) : (
+              summary.days.map((day) => (
+                <DayCard
+                  key={day.dayKey}
+                  day={day}
+                  currency={currency}
+                  showOperator={showOperator}
+                  onRecordClick={onRecordClick}
+                  language={language}
+                />
+              ))
+            )}
+          </div>
+        )}
       </Card>
+
+      {/* Available piece rates — reference list in the space the daily list
+          freed up. Full precision (formatRate): rates are never rounded. */}
+      {rates && rates.length > 0 && (
+        <Card className="p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {ms ? 'Kadar upah' : 'Piece rates'}
+          </p>
+          <div className="divide-y divide-slate-100">
+            {rates.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-slate-700">{r.name}</p>
+                  {r.machineName && <p className="text-[11px] text-slate-500">{r.machineName}</p>}
+                </div>
+                <span className="shrink-0 text-sm font-semibold text-slate-700">
+                  {formatRate(r.price, currency)}/{r.unit}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Hanging / unfinished tasks */}
       {summary.open.length > 0 && (
