@@ -18,8 +18,8 @@ export default function OpenTasks() {
       <h1 className="text-lg font-bold text-slate-800">Kerja aktif</h1>
 
       {/* Extra-tall on purpose: the main action, pressed outdoors with gloves. */}
-      <Button full size="lg" className="h-16" onClick={() => navigate('/open/new')}>
-        <IconPlus width={22} height={22} /> Mula kerja
+      <Button full size="lg" className="h-20 text-xl" onClick={() => navigate('/open/new')}>
+        <IconPlus width={26} height={26} /> Mula kerja
       </Button>
 
       {tasks && tasks.length === 0 && (
