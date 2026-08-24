@@ -184,24 +184,6 @@ export default function MonthSummary({
         </div>
       )}
 
-      {/* Days */}
-      {summary.days.length === 0 ? (
-        <EmptyState
-          title={ms ? 'Tiada kerja siap bulan ini' : 'No completed work this month'}
-          subtitle={ms ? 'Rekod siap akan dipaparkan di sini.' : 'Finished records will appear here, grouped by day.'}
-        />
-      ) : (
-        summary.days.map((day) => (
-          <DayCard
-            key={day.dayKey}
-            day={day}
-            currency={currency}
-            showOperator={showOperator}
-            onRecordClick={onRecordClick}
-            language={language}
-          />
-        ))
-      )}
     </div>
   )
 }
