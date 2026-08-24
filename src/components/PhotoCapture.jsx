@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { getPhoto } from '../db/repo.js'
 import { capturePhotoMeta, getDevicePosition } from '../lib/photoMeta.js'
-import { compressImage } from '../lib/image.js'
+import { compressImage, stampPhoto } from '../lib/image.js'
 import { GpsSource } from '../db/models.js'
 import { dateTimeSecondsOf, formatGps, formatBytes, toLocalInput, fromLocalInput, formatLatLng, parseLatLng } from '../lib/format.js'
 import { usePhotoUrl, Lightbox } from './PhotoThumb.jsx'
@@ -106,14 +106,20 @@ export default function PhotoCapture({
       const blob = await compressImage(file)
       if (token !== tokenRef.current) return
       const warm = detectLocation ? warmGpsRef.current : null
+      const provisionalAt = new Date().toISOString()
+      const provisionalGps = warm
+        ? { lat: warm.lat, lng: warm.lng, source: GpsSource.DEVICE, accuracy: warm.accuracy ?? null }
+        : { lat: null, lng: null, source: GpsSource.NONE, accuracy: null }
       const provisional = {
-        blob,
-        capturedAt: new Date().toISOString(),
+        // Operator evidence carries a burnt-in banner (date-time + GPS). The
+        // provisional stamp is replaced below once EXIF/GPS detection lands —
+        // always stamped onto the ORIGINAL blob, so banners never stack.
+        blob: cameraOnly ? await stampPhoto(blob, { capturedAt: provisionalAt, gps: provisionalGps }) : blob,
+        capturedAt: provisionalAt,
         timeSource: detectTime ? GpsSource.DEVICE : GpsSource.NONE,
-        gps: warm
-          ? { lat: warm.lat, lng: warm.lng, source: GpsSource.DEVICE, accuracy: warm.accuracy ?? null }
-          : { lat: null, lng: null, source: GpsSource.NONE, accuracy: null }
+        gps: provisionalGps
       }
+      if (token !== tokenRef.current) return
       onChange(provisional)
       setBusy(false)
 
@@ -121,18 +127,18 @@ export default function PhotoCapture({
       if (detectTime || detectLocation) {
         setDetecting(true)
         capturePhotoMeta(file, { time: detectTime, gps: detectLocation })
-          .then((meta) => {
+          .then(async (meta) => {
             if (token !== tokenRef.current) return // photo replaced/removed meanwhile
             // Merge onto whatever the operator may have edited meanwhile;
             // hand-corrected fields win over the detected ones.
-            const cur = valueRef.current?.blob === blob ? valueRef.current : provisional
-            onChange({
-              ...cur,
-              capturedAt: !manualRef.current.time && detectTime ? meta.capturedAt : cur.capturedAt,
-              timeSource: !manualRef.current.time && detectTime ? meta.timeSource : cur.timeSource,
-              // Keep the warmed GPS if the background pass found nothing better.
-              gps: !manualRef.current.gps && meta.gps && meta.gps.lat != null ? meta.gps : cur.gps
-            })
+            const cur = valueRef.current || provisional
+            const capturedAt = !manualRef.current.time && detectTime ? meta.capturedAt : cur.capturedAt
+            const timeSource = !manualRef.current.time && detectTime ? meta.timeSource : cur.timeSource
+            // Keep the warmed GPS if the background pass found nothing better.
+            const gps = !manualRef.current.gps && meta.gps && meta.gps.lat != null ? meta.gps : cur.gps
+            const finalBlob = cameraOnly ? await stampPhoto(blob, { capturedAt, gps }) : blob
+            if (token !== tokenRef.current) return
+            onChange({ ...cur, blob: finalBlob, capturedAt, timeSource, gps })
           })
           .finally(() => {
             if (token === tokenRef.current) setDetecting(false)

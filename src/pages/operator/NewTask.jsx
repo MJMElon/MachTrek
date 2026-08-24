@@ -22,9 +22,9 @@ export default function NewTask() {
   const submitting = useRef(false) // synchronous double-submit guard
 
   // Start time + location come from the meter photo (photo 1) only — photo 2 is
-  // an optional extra and shouldn't drive them. The operator can correct both
-  // right under the photo (PhotoCapture `editable`), so there are no separate
-  // time/location form fields here.
+  // an optional extra and shouldn't drive them. Operators can't edit them
+  // (evidence integrity) — a wrong photo is fixed by retaking it. No separate
+  // time/location form fields.
   const canSave = photo1?.capturedAt
 
   async function submit(e) {
@@ -70,7 +70,6 @@ export default function NewTask() {
           captureLabel="Ambil gambar meter mula"
           required
           cameraOnly
-          editable
           value={photo1}
           onChange={setPhoto1}
         />

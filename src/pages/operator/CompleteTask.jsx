@@ -83,8 +83,9 @@ export default function CompleteTask() {
   )
 
   // End time comes from the ending meter photo only (the true end-of-work
-  // moment), not the proof-of-work photo. The operator corrects time/location
-  // right under the photo (PhotoCapture `editable`) — no separate form fields.
+  // moment), not the proof-of-work photo. Operators can't edit time/location
+  // (evidence integrity) — a wrong photo is fixed by retaking it. No separate
+  // form fields; the compact strip under each photo shows what was captured.
   const endISO = endPhoto?.capturedAt || task?.endTime || null
   const endGpsVal =
     (endPhoto?.gps?.lat != null && endPhoto.gps) ||
@@ -517,13 +518,12 @@ export default function CompleteTask() {
         )}
 
         {/* End-of-task evidence — kept last, right before Complete. Time and
-            location live under the photos themselves (tap a row to correct). */}
+            location show read-only under each photo; retake to correct. */}
         <PhotoCapture
           language="ms"
           label="Bukti kerja"
           required
           cameraOnly
-          editable
           value={endWorkPhoto}
           onChange={onEndWorkPhoto}
           detectTime={false}
@@ -534,7 +534,6 @@ export default function CompleteTask() {
           label="Gambar meter akhir"
           required
           cameraOnly
-          editable
           value={endPhoto}
           onChange={onEndPhoto}
           previewHeight="h-28"

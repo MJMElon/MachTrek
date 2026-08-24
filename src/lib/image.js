@@ -44,6 +44,65 @@ export async function compressImage(file) {
   }
 }
 
+/**
+ * Burn a black banner row onto the BOTTOM of a photo with the capture
+ * date-time and GPS, so the evidence carries its own metadata even as a bare
+ * image file. The banner is appended below the image (canvas grows taller),
+ * never drawn over it — meter readings often sit at the photo's edge.
+ * Falls back to the untouched blob on any failure.
+ *
+ * @param {Blob} blob - the (already compressed) JPEG
+ * @param {{capturedAt?: string, gps?: {lat: number|null, lng: number|null}}} meta
+ * @returns {Promise<Blob>}
+ */
+export async function stampPhoto(blob, { capturedAt, gps } = {}) {
+  try {
+    const parts = []
+    if (capturedAt) parts.push(stampTime(capturedAt))
+    if (gps?.lat != null && gps?.lng != null) {
+      parts.push(`${Number(gps.lat).toFixed(5)}, ${Number(gps.lng).toFixed(5)}`)
+    }
+    const text = parts.join('   ')
+    if (!text) return blob
+
+    const bitmap = await loadBitmap(blob)
+    const w = bitmap.width
+    const h = bitmap.height
+    const bar = Math.max(22, Math.round(w * 0.055))
+    const canvas = makeCanvas(w, h + bar)
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(bitmap, 0, 0)
+    ctx.fillStyle = '#000'
+    ctx.fillRect(0, h, w, bar)
+
+    // Shrink the font until the line fits the banner width.
+    let size = Math.round(bar * 0.5)
+    ctx.fillStyle = '#fff'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    do {
+      ctx.font = `${size}px system-ui, -apple-system, sans-serif`
+      if (ctx.measureText(text).width <= w - bar * 0.6) break
+      size--
+    } while (size > 8)
+    ctx.fillText(text, w / 2, h + bar / 2 + 1)
+
+    if (bitmap.close) bitmap.close()
+    const out = await toBlob(canvas, 0.8)
+    return out && out.size ? out : blob
+  } catch {
+    return blob
+  }
+}
+
+// "24/08/2026 14:03:21" — local time, unambiguous day-first order.
+function stampTime(iso) {
+  const d = new Date(iso)
+  if (isNaN(d)) return ''
+  const p = (n) => String(n).padStart(2, '0')
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
 async function encode(bitmap, maxEdge, quality) {
   const { width, height } = fit(bitmap.width, bitmap.height, maxEdge)
   const canvas = makeCanvas(width, height)
