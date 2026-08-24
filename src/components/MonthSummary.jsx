@@ -28,6 +28,9 @@ function createdByBadge(createdBy, ms = false) {
  *   onOpenClick   - (task) => void; tap a hanging task
  *   rates         - optional [{id, name, unit, price, machineName}] shown as a
  *                   reference card under the total box
+ *   collapseDays  - OPERATOR VIEW ONLY: hide the daily list inside the total
+ *                   box behind a toggle + show the estimate disclaimer. Admin
+ *                   views keep the original always-visible list.
  */
 export default function MonthSummary({
   tasks,
@@ -38,15 +41,35 @@ export default function MonthSummary({
   onRecordClick,
   onOpenClick,
   rates = null,
+  collapseDays = false,
   language = 'en'
 }) {
   const ms = language === 'ms'
   const summary = buildMonthlySummary(tasks || [], monthKey)
   const atCurrent = monthKey >= thisMonth()
   const atFloor = monthKey <= minRetainedMonthKey() // 3-year retention limit
-  // The daily list lives INSIDE the total box, hidden until tapped — the box
-  // stays a small at-a-glance card; the detail is one tap away.
+  // Operator view: the daily list lives INSIDE the total box, hidden until
+  // tapped — the box stays a small at-a-glance card; the detail is a tap away.
   const [showDays, setShowDays] = useState(false)
+
+  const dayCards =
+    summary.days.length === 0 ? (
+      <EmptyState
+        title={ms ? 'Tiada kerja siap bulan ini' : 'No completed work this month'}
+        subtitle={ms ? 'Rekod siap akan dipaparkan di sini.' : 'Finished records will appear here, grouped by day.'}
+      />
+    ) : (
+      summary.days.map((day) => (
+        <DayCard
+          key={day.dayKey}
+          day={day}
+          currency={currency}
+          showOperator={showOperator}
+          onRecordClick={onRecordClick}
+          language={language}
+        />
+      ))
+    )
 
   return (
     <div className="space-y-3">
@@ -90,47 +113,31 @@ export default function MonthSummary({
           )}
         </div>
 
-        {/* Deliberately in simple Malay for everyone: the total is an estimate
-            of piece-rate work only — not the final pay. */}
-        <p className="mt-2 text-center text-[11px] text-slate-500">
-          Jumlah ini anggaran upah kerja sahaja. Ia boleh berubah dan tidak termasuk elaun lain.
-        </p>
+        {collapseDays && (
+          <>
+            {/* Simple Malay on purpose: the total is an estimate of piece-rate
+                work only — not the final pay. */}
+            <p className="mt-2 text-center text-[11px] text-slate-500">
+              Jumlah ini anggaran upah kerja sahaja. Ia boleh berubah dan tidak termasuk elaun lain.
+            </p>
 
-        <button
-          type="button"
-          onClick={() => setShowDays((v) => !v)}
-          className="mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-sm font-medium text-brand active:bg-slate-50"
-        >
-          {ms
-            ? showDays ? 'Tutup senarai harian' : 'Lihat senarai harian'
-            : showDays ? 'Hide daily list' : 'View daily list'}
-          <IconChevron
-            width={16}
-            height={16}
-            className={`transition-transform ${showDays ? '-rotate-90' : 'rotate-90'}`}
-          />
-        </button>
-
-        {showDays && (
-          <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
-            {summary.days.length === 0 ? (
-              <EmptyState
-                title={ms ? 'Tiada kerja siap bulan ini' : 'No completed work this month'}
-                subtitle={ms ? 'Rekod siap akan dipaparkan di sini.' : 'Finished records will appear here, grouped by day.'}
+            <button
+              type="button"
+              onClick={() => setShowDays((v) => !v)}
+              className="mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-sm font-medium text-brand active:bg-slate-50"
+            >
+              {ms
+                ? showDays ? 'Tutup senarai harian' : 'Lihat senarai harian'
+                : showDays ? 'Hide daily list' : 'View daily list'}
+              <IconChevron
+                width={16}
+                height={16}
+                className={`transition-transform ${showDays ? '-rotate-90' : 'rotate-90'}`}
               />
-            ) : (
-              summary.days.map((day) => (
-                <DayCard
-                  key={day.dayKey}
-                  day={day}
-                  currency={currency}
-                  showOperator={showOperator}
-                  onRecordClick={onRecordClick}
-                  language={language}
-                />
-              ))
-            )}
-          </div>
+            </button>
+
+            {showDays && <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">{dayCards}</div>}
+          </>
         )}
       </Card>
 
@@ -184,6 +191,8 @@ export default function MonthSummary({
         </div>
       )}
 
+      {/* Admin views: the daily list stays right here, always visible. */}
+      {!collapseDays && dayCards}
     </div>
   )
 }

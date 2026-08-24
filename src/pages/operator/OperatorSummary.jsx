@@ -93,6 +93,7 @@ export default function OperatorSummary() {
         currency={currency}
         onOpenClick={(t) => navigate(`/open/${t.id}`)}
         rates={rates}
+        collapseDays
         language="ms"
       />
 

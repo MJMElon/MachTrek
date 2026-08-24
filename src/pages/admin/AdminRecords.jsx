@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { getMonthTasks, listOperators, listCompanies, isMonthLocked, listTracks, getOperator, listOperatorMachines, listPieceRates, kerjaJamRate } from '../../db/repo.js'
+import { getMonthTasks, listOperators, listCompanies, isMonthLocked, listTracks } from '../../db/repo.js'
 import { getMeta } from '../../db/database.js'
 import { monthKeyOf, monthLabel } from '../../lib/format.js'
 import { useAuth } from '../../auth/AuthContext.jsx'
@@ -96,27 +96,6 @@ export default function AdminRecords() {
   useEffect(() => {
     if (activeOpId) writeLastOperator(activeOpId)
   }, [activeOpId])
-
-  // The selected operator's piece rates (their machines' rates + Kerja jam) —
-  // shown as a reference list under the month total.
-  const opRates = useLiveQuery(
-    async () => {
-      if (!activeOpId) return []
-      const [op, machines] = await Promise.all([getOperator(activeOpId), listOperatorMachines(activeOpId)])
-      const out = []
-      const kj = kerjaJamRate(op)
-      if (kj.price > 0) out.push({ ...kj, machineName: null })
-      for (const m of machines) {
-        const rs = await listPieceRates({ machineId: m.id })
-        for (const r of rs) {
-          out.push({ id: r.id, name: r.name, unit: r.unit, price: r.price, machineName: machines.length > 1 ? m.name : null })
-        }
-      }
-      return out
-    },
-    [activeOpId],
-    []
-  )
 
   const liveTasks = useLiveQuery(
     () => (activeOpId ? getMonthTasks({ operatorId: activeOpId, monthKey }) : Promise.resolve([])),
@@ -221,7 +200,6 @@ export default function AdminRecords() {
             showOperator={false}
             onRecordClick={editTask}
             onOpenClick={editTask}
-            rates={opRates}
           />
         </>
       ) : (
