@@ -34,6 +34,13 @@ export function isDayUnit(unit) {
   return DAY_UNITS.has(norm(unit).toLowerCase())
 }
 
+// Hour-based work ("jam") — the quantity IS the duration, so admin forms
+// pre-fill it from the computed duration (still editable).
+const HOUR_UNITS = new Set(['jam', 'hour', 'hours', 'hr', 'hrs', 'h'])
+export function isHourUnit(unit) {
+  return HOUR_UNITS.has(norm(unit).toLowerCase())
+}
+
 const PALETTE = ['#2563eb', '#16a34a', '#d97706', '#db2777', '#7c3aed', '#0891b2', '#dc2626', '#65a30d', '#9333ea', '#0d9488']
 export const colorFor = (i) => PALETTE[i % PALETTE.length]
 

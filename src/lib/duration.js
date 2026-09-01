@@ -10,6 +10,12 @@ export function minutesBetween(startISO, endISO) {
 }
 
 /** Hours to 1 decimal, e.g. "2.5 jam" / "—". */
+/** Duration as a quantity in hours, e.g. 150 -> "2.5" (2 dp max); "" when unknown. */
+export function hoursQty(mins) {
+  if (mins == null) return ''
+  return String(Math.round((mins / 60) * 100) / 100)
+}
+
 export function formatHours(mins) {
   if (mins == null) return '—'
   return `${(mins / 60).toFixed(1)} jam`

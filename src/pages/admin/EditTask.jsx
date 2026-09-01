@@ -21,13 +21,13 @@ const DistanceRecorder = lazy(() => import('../../components/DistanceRecorder.js
 import { getMeta } from '../../db/database.js'
 import { TaskStatus, GpsSource, HOURLY_RATE_NAME } from '../../db/models.js'
 import { toLocalInput, fromLocalInput, formatMoney, formatRate, dayKeyOf, monthKeyOf, formatLatLng, parseLatLng } from '../../lib/format.js'
-import { minutesBetween, formatHours } from '../../lib/duration.js'
+import { minutesBetween, formatHours, hoursQty } from '../../lib/duration.js'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import PhotoCapture from '../../components/PhotoCapture.jsx'
 import { Button, Card, Field, NumberInput, TextInput, TextArea, Select, Spinner, Badge } from '../../components/ui.jsx'
 import { QuantityInput } from '../../components/QuantityInput.jsx'
-import { isDayUnit, DAY_QTY_CHOICES } from '../../lib/dashboard.js'
+import { isDayUnit, isHourUnit, DAY_QTY_CHOICES } from '../../lib/dashboard.js'
 import { evalExpr, isExpression } from '../../lib/expr.js'
 import { IconTrash, IconLock, IconWarning } from '../../components/icons.jsx'
 
@@ -93,6 +93,9 @@ export default function EditTask() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const submitting = useRef(false)
+  // Hour-based work: was the quantity typed by hand? null = not decided yet
+  // (resolved from the saved record once its rate + duration are known).
+  const qtyTouched = useRef(null)
 
   useEffect(() => {
     if (task && !f) {
@@ -189,6 +192,21 @@ export default function EditTask() {
   const durationMins = f ? computeDur(f) : null
   const qtyNum = evalExpr(f?.quantity)
   const amount = rate && qtyNum != null ? qtyNum * Number(rate.price) : null
+
+  // Hour-based work ("jam"): the quantity IS the duration, so mirror
+  // "Duration (auto)" until the admin types their own value. A saved quantity
+  // that differs from the duration was set by hand and is left alone; clearing
+  // the field resumes the auto-fill.
+  const hourly = !!rate && isHourUnit(rate.unit) && !qtyLocked
+  useEffect(() => {
+    if (!f || !hourly) return
+    const auto = hoursQty(durationMins)
+    if (qtyTouched.current === null) {
+      qtyTouched.current = f.quantity.trim() !== '' && f.quantity.trim() !== auto
+    }
+    if (qtyTouched.current || f.quantity === auto) return
+    setF((p) => ({ ...p, quantity: auto }))
+  }, [f, hourly, durationMins])
 
   if (task === undefined || !f) {
     return (
@@ -473,7 +491,14 @@ export default function EditTask() {
         <Card className="mt-2 space-y-4 p-4">
           <h3 className="text-sm font-semibold text-slate-800">Work & rate</h3>
           <Field label="Piece rate" hint={f.machineId ? undefined : 'Choose a machine first'}>
-            <Select value={f.rateId} onChange={set('rateId')} disabled={!f.machineId}>
+            <Select
+              value={f.rateId}
+              onChange={(e) => {
+                qtyTouched.current = false // new work type → quantity follows the duration again
+                set('rateId')(e)
+              }}
+              disabled={!f.machineId}
+            >
               <option value="">None</option>
               {rateOptions.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -512,7 +537,11 @@ export default function EditTask() {
                 ? 'Measured by GPS — tap to see the sum'
                 : rate && isDayUnit(rate.unit)
                   ? 'Half day or full day'
-                  : 'A number or a sum like 5+5+10-6'
+                  : hourly
+                    ? qtyTouched.current
+                      ? 'Edited by hand — clear the field to use the duration again'
+                      : 'Auto from duration — type to override'
+                    : 'A number or a sum like 5+5+10-6'
             }
           >
             {rate && isDayUnit(rate.unit) && !qtyLocked ? (
@@ -536,7 +565,13 @@ export default function EditTask() {
                 {showQtyFormula ? trackExpr : `${trackTotal.toLocaleString()} m`}
               </button>
             ) : (
-              <QuantityInput value={f.quantity} onChange={(v) => setF((p) => ({ ...p, quantity: v }))} />
+              <QuantityInput
+                value={f.quantity}
+                onChange={(v) => {
+                  qtyTouched.current = v.trim() !== '' // typed = keep; cleared = back to auto
+                  setF((p) => ({ ...p, quantity: v }))
+                }}
+              />
             )}
           </Field>
           <Field label="Area">

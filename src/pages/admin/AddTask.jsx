@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { addManualTask, listAreas, listOperators, listMachines, listCompanies, listPieceRates, kerjaJamRate } from '../../db/repo.js'
@@ -12,14 +12,14 @@ const geoFor = (loc, fallback) => {
   const changed = lat !== (fallback?.lat ?? null) || lng !== (fallback?.lng ?? null)
   return { lat, lng, source: changed ? GpsSource.MANUAL : fallback?.source || GpsSource.DEVICE, accuracy: fallback?.accuracy ?? null }
 }
-import { minutesBetween, formatHours } from '../../lib/duration.js'
+import { minutesBetween, formatHours, hoursQty } from '../../lib/duration.js'
 import { uuid } from '../../lib/uuid.js'
 import { useAuth } from '../../auth/AuthContext.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import PhotoCapture from '../../components/PhotoCapture.jsx'
 import { Button, Card, Field, NumberInput, TextInput, TextArea, Select } from '../../components/ui.jsx'
 import { QuantityInput } from '../../components/QuantityInput.jsx'
-import { isDayUnit, DAY_QTY_CHOICES } from '../../lib/dashboard.js'
+import { isDayUnit, isHourUnit, DAY_QTY_CHOICES } from '../../lib/dashboard.js'
 import { evalExpr, isExpression } from '../../lib/expr.js'
 import { IconWarning } from '../../components/icons.jsx'
 
@@ -129,6 +129,8 @@ export default function AddTask() {
   const [entries, setEntries] = useState(() => [emptyEntry()])
   const setEntry = (key, patch) => setEntries((es) => es.map((b) => (b.key === key ? { ...b, ...patch } : b)))
   const field = (key, name) => (e) => setEntry(key, { [name]: e.target.value })
+  // Entries whose quantity the admin typed by hand (hour-based work only).
+  const qtyTouched = useRef(new Set())
 
   const [startPhoto, setStartPhoto] = useState(null)
   const [workPhoto, setWorkPhoto] = useState(null)
@@ -202,6 +204,20 @@ export default function AddTask() {
   const incomplete = derived
     .map((d, i) => (d.durationMins == null || !d.rate ? i + 1 : null))
     .filter((n) => n !== null)
+
+  // Hour-based work ("jam"): the quantity IS the duration, so each entry's
+  // quantity mirrors its "Duration (auto)" until the admin types their own
+  // value. Clearing the field resumes the auto-fill.
+  useEffect(() => {
+    const fixes = new Map()
+    entries.forEach((b, i) => {
+      const d = derived[i]
+      if (!d?.rate || !isHourUnit(d.rate.unit) || qtyTouched.current.has(b.key)) return
+      const auto = hoursQty(d.durationMins)
+      if (b.quantity !== auto) fixes.set(b.key, auto)
+    })
+    if (fixes.size) setEntries((es) => es.map((b) => (fixes.has(b.key) ? { ...b, quantity: fixes.get(b.key) } : b)))
+  }, [entries, derived])
 
   const addEntry = () =>
     setEntries((es) => {
@@ -462,7 +478,14 @@ export default function AddTask() {
             <Card className="mt-2 space-y-4 p-4">
               <h3 className="text-sm font-semibold text-slate-800">Work &amp; rate</h3>
               <Field label="Piece rate work" hint={shared.machineId ? 'Optional' : 'Choose a machine first'}>
-                <Select value={b.rateId} onChange={field(b.key, 'rateId')} disabled={!shared.machineId}>
+                <Select
+                  value={b.rateId}
+                  onChange={(e) => {
+                    qtyTouched.current.delete(b.key) // new work type → quantity follows the duration again
+                    field(b.key, 'rateId')(e)
+                  }}
+                  disabled={!shared.machineId}
+                >
                   <option value="">{shared.machineId ? 'Choose work type…' : 'Pick a machine first'}</option>
                   {rateOptions.map((r) => (
                     <option key={r.id} value={r.id}>
@@ -473,7 +496,15 @@ export default function AddTask() {
               </Field>
               <Field
                 label={`Quantity${d.rate ? ` (${d.rate.unit})` : ''}`}
-                hint={d.rate && isDayUnit(d.rate.unit) ? 'Half day or full day' : 'Optional — a number or a sum like 5+5+10-6'}
+                hint={
+                  d.rate && isDayUnit(d.rate.unit)
+                    ? 'Half day or full day'
+                    : d.rate && isHourUnit(d.rate.unit)
+                      ? qtyTouched.current.has(b.key)
+                        ? 'Edited by hand — clear the field to use the duration again'
+                        : 'Auto from duration — type to override'
+                      : 'Optional — a number or a sum like 5+5+10-6'
+                }
               >
                 {d.rate && isDayUnit(d.rate.unit) ? (
                   // Day work is only ever half a day or a whole day.
@@ -486,7 +517,14 @@ export default function AddTask() {
                     ))}
                   </Select>
                 ) : (
-                  <QuantityInput value={b.quantity} onChange={(v) => setEntry(b.key, { quantity: v })} />
+                  <QuantityInput
+                    value={b.quantity}
+                    onChange={(v) => {
+                      if (v.trim()) qtyTouched.current.add(b.key) // typed = keep
+                      else qtyTouched.current.delete(b.key) // cleared = back to auto
+                      setEntry(b.key, { quantity: v })
+                    }}
+                  />
                 )}
               </Field>
               <Field label="Area">
