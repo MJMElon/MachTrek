@@ -12,7 +12,7 @@ import { IconChevron, IconLock, IconUnlock, IconReport } from '../../components/
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100
 const thisMonth = () => monthKeyOf(new Date())
 
-function buildPayroll(tasks, { opById = new Map(), claimByOp = new Map(), companyFilter = null, companyIds = null } = {}) {
+function buildPayroll(tasks, { opById = new Map(), claimByOp = new Map(), companyById = new Map(), companyFilter = null, companyIds = null } = {}) {
   const completed = tasks.filter(
     (t) =>
       t.status === TaskStatus.COMPLETED &&
@@ -39,6 +39,25 @@ function buildPayroll(tasks, { opById = new Map(), claimByOp = new Map(), compan
     o.workAmount += Number(t.amount) || 0
     o.minutes += Number(t.durationMinutes) || 0
     o.count += 1
+  }
+
+  // Operators with a monthly salary or phone allowance are owed it even with no
+  // completed work, so list them under their own company too.
+  for (const op of opById.values()) {
+    if (!op.active || opMap.has(op.id)) continue
+    if (!(Number(op.basicSalary) || 0) && !(Number(op.phoneAllowance) || 0)) continue
+    if (companyFilter && op.companyId !== companyFilter) continue
+    if (companyIds && op.companyId && !companyIds.has(op.companyId)) continue
+    opMap.set(op.id, {
+      key: op.id,
+      operatorId: op.id,
+      name: op.name || 'Unknown',
+      companyName: companyById.get(op.companyId)?.name || 'No company',
+      companyId: op.companyId || null,
+      workAmount: 0,
+      minutes: 0,
+      count: 0
+    })
   }
 
   const compMap = new Map()
@@ -102,7 +121,8 @@ export default function PayrollReport() {
   const claimByOp = new Map((claims || []).map((c) => [c.operatorId, c]))
   // Existing companies only — once loaded, work from deleted companies is dropped.
   const companyIds = companies ? new Set(companies.map((c) => c.id)) : null
-  const report = buildPayroll(tasks || [], { opById, claimByOp, companyIds })
+  const companyById = new Map((companies || []).map((c) => [c.id, c]))
+  const report = buildPayroll(tasks || [], { opById, claimByOp, companyById, companyIds })
   // Don't let "next" reach an empty new month — cap at the latest month with a
   // claim (or the current month when there are no claims at all yet).
   const forwardCap = latestClaimMonth && latestClaimMonth < thisMonth() ? latestClaimMonth : thisMonth()
@@ -172,7 +192,7 @@ export default function PayrollReport() {
       </Card>
 
       {report.companies.length === 0 ? (
-        <EmptyState title="No completed work this month" subtitle="Payroll totals appear once operators finish tasks." />
+        <EmptyState title="No payroll this month" subtitle="Payroll totals appear once operators finish tasks, or have a salary/allowance set." />
       ) : (
         report.companies.map((company) => (
           <Card key={company.companyName} className="overflow-hidden">
@@ -203,7 +223,9 @@ export default function PayrollReport() {
                   <div className="min-w-0">
                     <p className="truncate font-medium text-slate-800">{o.name}</p>
                     <p className="text-xs text-slate-500">
-                      {formatHours(o.minutes)} · {o.count} record{o.count === 1 ? '' : 's'}
+                      {o.count === 0
+                        ? 'No work records · salary/allowance only'
+                        : `${formatHours(o.minutes)} · ${o.count} record${o.count === 1 ? '' : 's'}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

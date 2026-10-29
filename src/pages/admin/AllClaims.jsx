@@ -152,6 +152,11 @@ export default function AllClaims() {
       if (!byOp.has(t.operatorId)) byOp.set(t.operatorId, [])
       byOp.get(t.operatorId).push(t)
     }
+    // Operators of this company with a salary/allowance get a claim even without work.
+    for (const o of operators) {
+      if (!o.active || o.companyId !== companyId || byOp.has(o.id)) continue
+      if ((Number(o.basicSalary) || 0) || (Number(o.phoneAllowance) || 0)) byOp.set(o.id, [])
+    }
     return [...byOp.entries()]
       .map(([opId, opTasks]) => {
         const o = operators.find((x) => x.id === opId)
@@ -211,7 +216,7 @@ export default function AllClaims() {
       </div>
 
       {claims.length === 0 ? (
-        <EmptyState title="No claims this month" subtitle="No operator has completed work for this company in this month." />
+        <EmptyState title="No claims this month" subtitle="No operator has completed work or a salary/allowance for this company in this month." />
       ) : (
         <>
           <div className="space-y-6 print:space-y-0">
