@@ -45,7 +45,7 @@ function buildPayroll(tasks, { opById = new Map(), claimByOp = new Map(), compan
   // completed work, so list them under their own company too.
   for (const op of opById.values()) {
     if (!op.active || opMap.has(op.id)) continue
-    if (!(Number(op.basicSalary) || 0) && !(Number(op.phoneAllowance) || 0)) continue
+    if (!(Number(op.basicSalary) || 0) && !(Number(op.phoneAllowance) || 0) && !(Number(op.dieselSubsidy) || 0)) continue
     if (companyFilter && op.companyId !== companyFilter) continue
     if (companyIds && op.companyId && !companyIds.has(op.companyId)) continue
     opMap.set(op.id, {
@@ -62,12 +62,13 @@ function buildPayroll(tasks, { opById = new Map(), claimByOp = new Map(), compan
 
   const compMap = new Map()
   for (const o of opMap.values()) {
-    // Bahagian A also includes the monthly salary + phone allowance (operator
+    // Bahagian A also includes the monthly salary + phone allowance + diesel subsidy (operator
     // defaults), and Bahagian B is the saved incentives. The payroll total is
     // Bahagian C = A + B, matching the claim form.
     const opRec = o.operatorId ? opById.get(o.operatorId) : null
     o.salary = round2(Number(opRec?.basicSalary) || 0)
     o.allowance = round2(Number(opRec?.phoneAllowance) || 0)
+    o.diesel = round2(Number(opRec?.dieselSubsidy) || 0)
     const claim = o.operatorId ? claimByOp.get(o.operatorId) : null
     o.incentives = (claim?.incentives || [])
       .map((r) => ({ name: r.desc || 'Insentif', amount: round2((Number(r.rate) || 0) * (Number(r.qty) || 0)) }))
@@ -75,8 +76,8 @@ function buildPayroll(tasks, { opById = new Map(), claimByOp = new Map(), compan
     const incentivesTotal = o.incentives.reduce((s, r) => s + r.amount, 0)
 
     o.workAmount = round2(o.workAmount)
-    // Bahagian A = piece work + salary + allowance, B = incentives, C = A + B.
-    o.bahagianA = round2(o.workAmount + o.salary + o.allowance)
+    // Bahagian A = piece work + salary + allowance + diesel, B = incentives, C = A + B.
+    o.bahagianA = round2(o.workAmount + o.salary + o.allowance + o.diesel)
     o.bahagianB = round2(incentivesTotal)
     o.amount = round2(o.bahagianA + o.bahagianB)
     const ck = o.companyName

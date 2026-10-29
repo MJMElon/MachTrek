@@ -970,6 +970,7 @@ export async function upsertOperator(input) {
     // Pay defaults used to prefill the claim form.
     basicSalary: input.basicSalary !== undefined ? numOrNull(input.basicSalary) : existing?.basicSalary ?? null,
     phoneAllowance: input.phoneAllowance !== undefined ? numOrNull(input.phoneAllowance) : existing?.phoneAllowance ?? null,
+    dieselSubsidy: input.dieselSubsidy !== undefined ? numOrNull(input.dieselSubsidy) : existing?.dieselSubsidy ?? null,
     hourlyRate: input.hourlyRate !== undefined ? numOrNull(input.hourlyRate) : existing?.hourlyRate ?? null,
     machineIds: input.machineIds ?? existing?.machineIds ?? [],
     // Bumping this signs the operator out of every device on their next sync.

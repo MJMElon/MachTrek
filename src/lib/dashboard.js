@@ -173,8 +173,8 @@ export function buildDashboard({ tasks = [], operators = [], companies = [], yea
         const rate = Number(op.op.hourlyRate)
         const hasOld = Number.isFinite(rate) && rate > 0
         const basic = Number(op.op.basicSalary) || 0
-        const allowance = Number(op.op.phoneAllowance) || 0
-        // New = piece work + basic + phone allowance (same as the claim form).
+        const allowance = (Number(op.op.phoneAllowance) || 0) + (Number(op.op.dieselSubsidy) || 0)
+        // New = piece work + basic + phone allowance + diesel subsidy (same as the claim form).
         const newVals = work.map((w) => (w != null ? round2(w + basic + allowance) : 0))
         // Old = rounded hours × hourly rate + basic. Hours are rounded to 1
         // decimal first (same as the displayed total) — e.g. 26.07 h → 26.1 h × RM9.

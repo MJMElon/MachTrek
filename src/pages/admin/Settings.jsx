@@ -563,6 +563,7 @@ function OperatorEditor({ editing, companyId, machines, onClose }) {
   const [isSiteAdmin, setIsSiteAdmin] = useState(item?.isSiteAdmin === true)
   const [basicSalary, setBasicSalary] = useState(item?.basicSalary ?? '')
   const [phoneAllowance, setPhoneAllowance] = useState(item?.phoneAllowance ?? '')
+  const [dieselSubsidy, setDieselSubsidy] = useState(item?.dieselSubsidy ?? '')
   const [hourlyRate, setHourlyRate] = useState(item?.hourlyRate ?? '')
   const [forceLogout, setForceLogout] = useState(false)
   const [error, setError] = useState('')
@@ -589,6 +590,7 @@ function OperatorEditor({ editing, companyId, machines, onClose }) {
         isSiteAdmin,
         basicSalary: basicSalary === '' ? null : basicSalary,
         phoneAllowance: phoneAllowance === '' ? null : phoneAllowance,
+        dieselSubsidy: dieselSubsidy === '' ? null : dieselSubsidy,
         hourlyRate: hourlyRate === '' ? null : hourlyRate,
         machineIds: validIds,
         forceLogout
@@ -642,6 +644,9 @@ function OperatorEditor({ editing, companyId, machines, onClose }) {
           </Field>
           <Field label="Phone allowance" hint="Elaun telephone in claim form">
             <NumberInput value={phoneAllowance} onChange={(e) => setPhoneAllowance(e.target.value)} placeholder="0.00" />
+          </Field>
+          <Field label="Diesel subsidy" hint="Subsidi diesel in claim form">
+            <NumberInput value={dieselSubsidy} onChange={(e) => setDieselSubsidy(e.target.value)} placeholder="0.00" />
           </Field>
         </div>
         <Field label="Kerja jam" hint="Hourly rate (RM/jam) — selectable as a piece rate + drives the dashboard comparison">

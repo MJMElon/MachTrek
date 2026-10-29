@@ -128,7 +128,8 @@ export default function ClaimForm() {
     const today = todayStr()
     // Pre-fill the Section A pay rows from the operator's saved pay. Each row only
     // appears when that value is preset in Settings — "Gaji Bulanan" for basic
-    // salary, "Elaun telephone" for phone allowance; otherwise it's omitted (an
+    // salary, "Elaun telephone" for phone allowance, "Subsidi diesel" for diesel
+    // subsidy; otherwise it's omitted (an
     // admin can still add it manually).
     const payRows = []
     if (operator?.basicSalary != null) {
@@ -136,6 +137,9 @@ export default function ClaimForm() {
     }
     if (operator?.phoneAllowance != null) {
       payRows.push({ desc: 'Elaun telephone', unit: 'Sebulan', rate: String(operator.phoneAllowance), qty: '1' })
+    }
+    if (operator?.dieselSubsidy != null) {
+      payRows.push({ desc: 'Subsidi diesel', unit: 'Sebulan', rate: String(operator.dieselSubsidy), qty: '1' })
     }
     setExtraA(payRows)
     const s = company?.signers

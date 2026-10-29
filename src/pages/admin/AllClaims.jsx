@@ -155,7 +155,7 @@ export default function AllClaims() {
     // Operators of this company with a salary/allowance get a claim even without work.
     for (const o of operators) {
       if (!o.active || o.companyId !== companyId || byOp.has(o.id)) continue
-      if ((Number(o.basicSalary) || 0) || (Number(o.phoneAllowance) || 0)) byOp.set(o.id, [])
+      if ((Number(o.basicSalary) || 0) || (Number(o.phoneAllowance) || 0) || (Number(o.dieselSubsidy) || 0)) byOp.set(o.id, [])
     }
     return [...byOp.entries()]
       .map(([opId, opTasks]) => {
@@ -165,6 +165,7 @@ export default function AllClaims() {
         const extraA = []
         if (o.basicSalary != null) extraA.push({ desc: 'Gaji Bulanan', unit: 'Sebulan', rate: String(o.basicSalary), qty: '1' })
         if (o.phoneAllowance != null) extraA.push({ desc: 'Elaun telephone', unit: 'Sebulan', rate: String(o.phoneAllowance), qty: '1' })
+        if (o.dieselSubsidy != null) extraA.push({ desc: 'Subsidi diesel', unit: 'Sebulan', rate: String(o.dieselSubsidy), qty: '1' })
         const totalA =
           autoRows.reduce((s, r) => s + (Number(r.amount) || 0), 0) + extraA.reduce((s, r) => s + sub(r.rate, r.qty), 0)
         const machines = [...new Set(opTasks.map((t) => t.machineName).filter(Boolean))].join(', ')
