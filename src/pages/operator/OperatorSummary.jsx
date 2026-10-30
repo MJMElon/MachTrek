@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from '../../auth/AuthContext.jsx'
-import { getCompany, getMonthTasks, listTracks, getOperator, listOperatorMachines, listPieceRates, kerjaJamRate } from '../../db/repo.js'
+import { getCompany, getMonthTasks, listTracks, listOperatorMachines, listPieceRates, kerjaJamRate } from '../../db/repo.js'
 import { getMeta } from '../../db/database.js'
 import { monthKeyOf, monthLabel } from '../../lib/format.js'
 import MonthSummary from '../../components/MonthSummary.jsx'
@@ -35,14 +35,12 @@ export default function OperatorSummary() {
   // shown as a reference list under the month total.
   const rates = useLiveQuery(
     async () => {
-      const [op, machines] = await Promise.all([
-        getOperator(user.operatorId),
-        listOperatorMachines(user.operatorId)
-      ])
+      const machines = await listOperatorMachines(user.operatorId)
       const out = []
-      const kj = kerjaJamRate(op)
-      if (kj.price > 0) out.push({ ...kj, machineName: null })
       for (const m of machines) {
+        // Kerja jam is priced per machine.
+        const kj = kerjaJamRate(m)
+        if (kj.price > 0) out.push({ ...kj, id: `${kj.id}:${m.id}`, machineName: machines.length > 1 ? m.name : null })
         const rs = await listPieceRates({ machineId: m.id })
         for (const r of rs) {
           out.push({

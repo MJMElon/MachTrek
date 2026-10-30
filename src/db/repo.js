@@ -560,12 +560,11 @@ export async function deletePieceRate(id) {
 
 const isHourlyRate = (r) => (r.name || '').trim().toLowerCase() === HOURLY_RATE_NAME.toLowerCase()
 
-// "Kerja jam" is a virtual, per-operator piece rate (priced from the operator's
-// own hourly rate) that can be picked when recording a task — it is NOT stored
-// as a machine rate.
+// "Kerja jam" is a virtual piece rate (priced from the machine's hourly rate)
+// that can be picked when recording a task — it is NOT stored as a piece-rate row.
 export const KERJA_JAM_ID = 'kerja-jam'
-export function kerjaJamRate(operator) {
-  return { id: KERJA_JAM_ID, name: HOURLY_RATE_NAME, unit: HOURLY_RATE_UNIT, price: Number(operator?.hourlyRate) || 0, active: true }
+export function kerjaJamRate(machine) {
+  return { id: KERJA_JAM_ID, name: HOURLY_RATE_NAME, unit: HOURLY_RATE_UNIT, price: Number(machine?.hourlyRate) || 0, active: true }
 }
 // The "Kerja jam" rate isn't a real row — its sentinel id must never reach the
 // task's piece_rate_id (a uuid column on the server). Store null but keep the
@@ -926,6 +925,8 @@ export async function upsertMachine(input) {
     companyId: input.companyId ?? existing?.companyId ?? null,
     name: (input.name || '').trim(),
     active: input.active !== false,
+    // RM/jam for "Kerja jam" work on this machine + the dashboard's old-vs-new comparison.
+    hourlyRate: input.hourlyRate !== undefined ? numOrNull(input.hourlyRate) : existing?.hourlyRate ?? null,
     updatedAt: now,
     syncStatus: SyncStatus.PENDING
   }

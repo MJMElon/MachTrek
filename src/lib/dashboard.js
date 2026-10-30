@@ -1,12 +1,13 @@
 // Yearly dashboard aggregation. Pure functions — given a year's tasks + the
-// operators/companies, produce the chart series used by the Dashboard page.
+// machines/companies, produce the chart series used by the Dashboard page.
 //
-// Charts (per company, Jan–Dec, one series per operator unless noted):
+// Charts (per company, Jan–Dec, one series per machine unless noted — a machine
+// used by several operators adds up all their records):
 //   1. Speed (units / hour) per work-type. Distance-unit works (m, km…) are
 //      merged into one "Road & Drain works" chart; every other unit/work type
 //      gets its own chart.
-//   2. Salary: NEW (piece-rate earnings) vs OLD (hours × operator hourly rate),
-//      one small 2-line chart per operator.
+//   2. Earnings: NEW (piece-rate earnings) vs OLD (hours × machine hourly rate),
+//      one small 2-line chart per machine.
 //   3. Non-working days: calendar days in the month with no work recorded.
 
 import { TaskStatus, HOURLY_RATE_NAME } from '../db/models.js'
@@ -51,26 +52,25 @@ const zeros12 = () => Array.from({ length: 12 }, () => 0)
 const isHourlyTask = (t) => norm(t.pieceRateName).toLowerCase() === HOURLY_RATE_NAME.toLowerCase()
 
 /**
- * @param {{tasks:Array, operators:Array, companies:Array, year:number, now?:Date}} a
+ * @param {{tasks:Array, machines:Array, companies:Array, year:number, now?:Date}} a
  */
-export function buildDashboard({ tasks = [], operators = [], companies = [], year, now = new Date() }) {
+export function buildDashboard({ tasks = [], machines = [], companies = [], year, now = new Date() }) {
   const completed = tasks.filter((t) => t.status === TaskStatus.COMPLETED)
 
-  // Real workers (exclude site admins), grouped by company.
-  const workersByCompany = new Map()
-  for (const o of operators) {
-    if (o.isSiteAdmin) continue
-    const cid = o.companyId || 'none'
-    if (!workersByCompany.has(cid)) workersByCompany.set(cid, [])
-    workersByCompany.get(cid).push(o)
+  // Machines grouped by company.
+  const machinesByCompany = new Map()
+  for (const m of machines) {
+    const cid = m.companyId || 'none'
+    if (!machinesByCompany.has(cid)) machinesByCompany.set(cid, [])
+    machinesByCompany.get(cid).push(m)
   }
 
-  // Tasks grouped by operator.
-  const tasksByOp = new Map()
+  // Tasks grouped by machine — every operator's records on a machine add up.
+  const tasksByMachine = new Map()
   for (const t of completed) {
-    if (!t.operatorId) continue
-    if (!tasksByOp.has(t.operatorId)) tasksByOp.set(t.operatorId, [])
-    tasksByOp.get(t.operatorId).push(t)
+    if (!t.machineId) continue
+    if (!tasksByMachine.has(t.machineId)) tasksByMachine.set(t.machineId, [])
+    tasksByMachine.get(t.machineId).push(t)
   }
 
   // Elapsed days in a month (so the current/future months aren't counted as all
@@ -89,19 +89,19 @@ export function buildDashboard({ tasks = [], operators = [], companies = [], yea
   const companyName = (id) => companies.find((c) => c.id === id)?.name || 'No company'
 
   const out = []
-  for (const [cid, workers] of workersByCompany) {
-    // Skip operators whose company was deleted — that data shouldn't show.
+  for (const [cid, list] of machinesByCompany) {
+    // Skip machines whose company was deleted — that data shouldn't show.
     if (cid !== 'none' && !companies.some((c) => c.id === cid)) continue
-    const ops = workers
+    const units = list
       .slice()
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-      .map((o, i) => ({ id: o.id, name: o.name, color: colorFor(i), op: o }))
+      .map((m, i) => ({ id: m.id, name: m.name, color: colorFor(i), m }))
 
     // ---- 1. Speed groups (units / hour) ----
-    // groupKey -> { label, unit, perOp: Map(opId -> {qty[12], hrs[12]}) }
+    // groupKey -> { label, unit, perUnit: Map(machineId -> {qty[12], hrs[12]}) }
     const groups = new Map()
-    for (const op of ops) {
-      for (const t of tasksByOp.get(op.id) || []) {
+    for (const u of units) {
+      for (const t of tasksByMachine.get(u.id) || []) {
         const mi = monthIndex(t.monthKey)
         if (mi < 0 || mi > 11) continue
         // Skip "Kerja jam" (hourly) work — its quantity is the hours itself, so a
@@ -114,55 +114,55 @@ export function buildDashboard({ tasks = [], operators = [], companies = [], yea
         const key = distance ? 'road-drain' : `rate:${norm(t.pieceRateName) || 'work'}`
         const label = distance ? 'Road & Drain works' : norm(t.pieceRateName) || 'Work'
         const unit = distance ? 'm' : norm(t.unit)
-        if (!groups.has(key)) groups.set(key, { key, label, unit, perOp: new Map() })
+        if (!groups.has(key)) groups.set(key, { key, label, unit, perUnit: new Map() })
         const g = groups.get(key)
-        if (!g.perOp.has(op.id)) g.perOp.set(op.id, { qty: empty12(), hrs: empty12() })
-        const cell = g.perOp.get(op.id)
+        if (!g.perUnit.has(u.id)) g.perUnit.set(u.id, { qty: empty12(), hrs: empty12() })
+        const cell = g.perUnit.get(u.id)
         cell.qty[mi] = (cell.qty[mi] || 0) + (Number(t.quantity) || 0)
         cell.hrs[mi] = (cell.hrs[mi] || 0) + hoursOf(t.durationMinutes)
       }
     }
     const speedGroups = [...groups.values()]
       .map((g) => {
-        const series = ops
-          .map((op) => {
-            const cell = g.perOp.get(op.id)
+        const series = units
+          .map((u) => {
+            const cell = g.perUnit.get(u.id)
             if (!cell) return null
             const values = cell.qty.map((q, mi) => {
               const h = cell.hrs[mi]
               return q != null && h ? round2(q / h) : null
             })
-            return values.some((v) => v != null) ? { name: op.name, color: op.color, values } : null
+            return values.some((v) => v != null) ? { name: u.name, color: u.color, values } : null
           })
           .filter(Boolean)
-        return { ...g, series }
+        return { key: g.key, label: g.label, unit: g.unit, series }
       })
       .filter((g) => g.series.length)
       .sort((a, b) => (a.key === 'road-drain' ? -1 : b.key === 'road-drain' ? 1 : a.label.localeCompare(b.label)))
 
-    // Road & Drain works total (meters) per operator — the same merged distance
+    // Road & Drain works total (meters) per machine — the same merged distance
     // work as the speed chart, but the raw quantity instead of speed.
     const rd = groups.get('road-drain')
     const roadDrainSeries = rd
-      ? ops
-          .map((op) => {
-            const cell = rd.perOp.get(op.id)
+      ? units
+          .map((u) => {
+            const cell = rd.perUnit.get(u.id)
             if (!cell) return null
             const values = cell.qty.map((q) => (q != null ? round2(q) : null))
-            return values.some((v) => v != null) ? { name: op.name, color: op.color, values } : null
+            return values.some((v) => v != null) ? { name: u.name, color: u.color, values } : null
           })
           .filter(Boolean)
       : []
 
-    // ---- 2. Salary: new (piece) vs old (hourly) per operator ----
-    // New = piece-rate work + basic salary + phone allowance — identical to the
-    // claim form's Bahagian A. Old = rounded hours × hourly rate + basic salary
-    // (no allowance). Basic/allowance apply per month that has work.
-    const salaryByOperator = ops
-      .map((op) => {
-        const list = tasksByOp.get(op.id) || []
+    // ---- 2. Earnings: new (piece) vs old (hourly) per machine ----
+    // Work only, no salary/allowances (those belong to operators, not machines).
+    // New = all completed work amounts on the machine. Old = rounded hours on
+    // the machine × the machine's hourly rate.
+    const salaryByMachine = units
+      .map((u) => {
+        const list = tasksByMachine.get(u.id) || []
         if (!list.length) return null
-        const work = empty12() // piece-rate earnings per month
+        const work = empty12()
         const hrs = empty12()
         for (const t of list) {
           const mi = monthIndex(t.monthKey)
@@ -170,18 +170,16 @@ export function buildDashboard({ tasks = [], operators = [], companies = [], yea
           work[mi] = (work[mi] || 0) + (Number(t.amount) || 0)
           hrs[mi] = (hrs[mi] || 0) + hoursOf(t.durationMinutes)
         }
-        const rate = Number(op.op.hourlyRate)
+        if (!work.some((w) => w != null)) return null
+        const rate = Number(u.m.hourlyRate)
         const hasOld = Number.isFinite(rate) && rate > 0
-        const basic = Number(op.op.basicSalary) || 0
-        const allowance = (Number(op.op.phoneAllowance) || 0) + (Number(op.op.dieselSubsidy) || 0)
-        // New = piece work + basic + phone allowance + diesel subsidy (same as the claim form).
-        const newVals = work.map((w) => (w != null ? round2(w + basic + allowance) : 0))
-        // Old = rounded hours × hourly rate + basic. Hours are rounded to 1
-        // decimal first (same as the displayed total) — e.g. 26.07 h → 26.1 h × RM9.
-        const oldVals = hrs.map((h) => (hasOld && h != null ? round2(round1(h) * rate + basic) : null))
+        const newVals = work.map((w) => (w != null ? round2(w) : 0))
+        // Hours are rounded to 1 decimal first (same as the displayed total) —
+        // e.g. 26.07 h → 26.1 h × RM9.
+        const oldVals = hrs.map((h) => (hasOld && h != null ? round2(round1(h) * rate) : null))
         return {
-          operatorId: op.id,
-          name: op.name,
+          machineId: u.id,
+          name: u.name,
           hasOld,
           series: [
             { name: 'New (piece rate)', color: '#16a34a', values: newVals },
@@ -191,10 +189,10 @@ export function buildDashboard({ tasks = [], operators = [], companies = [], yea
       })
       .filter(Boolean)
 
-    // ---- 3. Non-working days per operator ----
-    const nonWorkingSeries = ops.map((op) => {
+    // ---- 3. Non-working days per machine ----
+    const nonWorkingSeries = units.map((u) => {
       const days = empty12()
-      for (const t of tasksByOp.get(op.id) || []) {
+      for (const t of tasksByMachine.get(u.id) || []) {
         const mi = monthIndex(t.monthKey)
         if (mi < 0 || mi > 11 || !t.dayKey) continue
         if (!days[mi]) days[mi] = new Set()
@@ -206,19 +204,19 @@ export function buildDashboard({ tasks = [], operators = [], companies = [], yea
         const worked = days[mi] ? days[mi].size : 0
         return Math.max(0, ed - worked)
       })
-      return { name: op.name, color: op.color, values }
+      return { name: u.name, color: u.color, values }
     })
 
     // ---- 4. Work-hours mix: Kerja jam vs other piece-rate (stacked area) ----
-    // Per operator, monthly hours split into Kerja jam (hourly) work and all
+    // Per machine, monthly hours split into Kerja jam (hourly) work and all
     // other piece-rate work. The two series stack: red base = Kerja jam hours,
-    // blue on top = the rest, so the blue line is the operator's total hours.
-    const durationByOperator = ops
-      .map((op) => {
+    // blue on top = the rest, so the blue line is the machine's total hours.
+    const durationByMachine = units
+      .map((u) => {
         const kerjaJam = zeros12()
         const other = zeros12()
         let any = false
-        for (const t of tasksByOp.get(op.id) || []) {
+        for (const t of tasksByMachine.get(u.id) || []) {
           const mi = monthIndex(t.monthKey)
           if (mi < 0 || mi > 11) continue
           const h = hoursOf(t.durationMinutes)
@@ -230,8 +228,8 @@ export function buildDashboard({ tasks = [], operators = [], companies = [], yea
         }
         if (!any) return null
         return {
-          operatorId: op.id,
-          name: op.name,
+          machineId: u.id,
+          name: u.name,
           series: [
             // Hours shown to 1 decimal, same convention as the rest of the app.
             { name: 'Kerja jam', color: '#dc2626', values: kerjaJam.map(round1) },
@@ -241,15 +239,15 @@ export function buildDashboard({ tasks = [], operators = [], companies = [], yea
       })
       .filter(Boolean)
 
-    const hasData = speedGroups.length > 0 || salaryByOperator.length > 0 || durationByOperator.length > 0
+    const hasData = speedGroups.length > 0 || salaryByMachine.length > 0 || durationByMachine.length > 0
     out.push({
       id: cid,
       name: companyName(cid === 'none' ? null : cid),
-      operators: ops.map(({ id, name, color }) => ({ id, name, color })),
+      machines: units.map(({ id, name, color }) => ({ id, name, color })),
       speedGroups,
       roadDrainSeries,
-      salaryByOperator,
-      durationByOperator,
+      salaryByMachine,
+      durationByMachine,
       nonWorkingSeries,
       hasData
     })

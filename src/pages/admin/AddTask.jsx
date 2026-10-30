@@ -178,10 +178,10 @@ export default function AddTask() {
     [shared.machineId],
     []
   )
-  // "Kerja jam" (the chosen operator's hourly rate) is offered with the machine's rates.
+  // "Kerja jam" (the machine's hourly rate) is offered with the machine's rates.
   const rateOptions = useMemo(
-    () => (shared.machineId ? [kerjaJamRate(selectedOperator), ...(rates || [])] : []),
-    [shared.machineId, selectedOperator, rates]
+    () => (shared.machineId ? [kerjaJamRate((machines || []).find((m) => m.id === shared.machineId)), ...(rates || [])] : []),
+    [shared.machineId, machines, rates]
   )
 
   // Per-entry derived values, in the same order as `entries`.
@@ -477,7 +477,7 @@ export default function AddTask() {
 
             <Card className="mt-2 space-y-4 p-4">
               <h3 className="text-sm font-semibold text-slate-800">Work &amp; rate</h3>
-              <Field label="Piece rate work" hint={shared.machineId ? 'Optional' : 'Choose a machine first'}>
+              <Field label="Work" hint={shared.machineId ? 'Optional' : 'Choose a machine first'}>
                 <Select
                   value={b.rateId}
                   onChange={(e) => {

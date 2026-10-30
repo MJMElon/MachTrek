@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { getYearTasks, listOperators, listCompanies } from '../../db/repo.js'
+import { getYearTasks, listMachines, listCompanies } from '../../db/repo.js'
 import { getMeta } from '../../db/database.js'
 import { formatMoney, minRetainedMonthKey } from '../../lib/format.js'
 import { buildDashboard } from '../../lib/dashboard.js'
@@ -14,13 +14,13 @@ export default function Dashboard() {
   const [year, setYear] = useState(thisYear())
 
   const tasks = useLiveQuery(() => getYearTasks(year), [year], undefined)
-  const operators = useLiveQuery(() => listOperators({ includeInactive: true }), [], [])
+  const machines = useLiveQuery(() => listMachines({ includeInactive: true }), [], [])
   const companies = useLiveQuery(() => listCompanies({ includeInactive: true }), [], [])
   const currency = useLiveQuery(() => getMeta('currency', 'RM'), [], 'RM')
 
   const data = useMemo(
-    () => buildDashboard({ tasks: tasks || [], operators: operators || [], companies: companies || [], year }),
-    [tasks, operators, companies, year]
+    () => buildDashboard({ tasks: tasks || [], machines: machines || [], companies: companies || [], year }),
+    [tasks, machines, companies, year]
   )
 
   const loading = tasks === undefined
@@ -68,7 +68,7 @@ export default function Dashboard() {
             <IconChevron width={20} height={20} />
           </button>
         </div>
-        <p className="mt-1 text-center text-xs text-slate-500">Operator comparison · Jan–Dec</p>
+        <p className="mt-1 text-center text-xs text-slate-500">Machine comparison · Jan–Dec</p>
       </Card>
 
       {loading ? (
@@ -116,7 +116,7 @@ function CompanyDashboard({ company, moneyFmt }) {
       {/* The four main charts — 2×2 on desktop, stacked one-per-row on phones. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Speed per work type */}
-        <Section title="Kelajuan pengendali (unit / jam)">
+        <Section title="Kelajuan mesin (unit / jam)">
           {company.speedGroups.length === 0 ? (
             <Hint>No measured work yet.</Hint>
           ) : (
@@ -141,16 +141,16 @@ function CompanyDashboard({ company, moneyFmt }) {
 
         {/* Salary: new vs old */}
         <Section title="Gaji: sistem baru (kadar kerja) vs lama (ikut jam)">
-          {company.salaryByOperator.length === 0 ? (
+          {company.salaryByMachine.length === 0 ? (
             <Hint>No earnings yet.</Hint>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {company.salaryByOperator.map((o) => (
-                <div key={o.operatorId}>
+              {company.salaryByMachine.map((o) => (
+                <div key={o.machineId}>
                   <BarChart title={o.name} unit={currencyHint(o)} series={o.series} formatValue={moneyFmt} />
                   {!o.hasOld && (
                     <p className="px-1 pt-0.5 text-[11px] text-amber-600">
-                      Set this operator’s “Kerja jam” (hourly) rate in Settings to compare.
+                      Set this machine’s hourly rate in Settings to compare.
                     </p>
                   )}
                 </div>
@@ -161,12 +161,12 @@ function CompanyDashboard({ company, moneyFmt }) {
 
         {/* Work-hours mix: Kerja jam (red) stacked under other piece-rate work (blue) */}
         <Section title="Jam kerja: Kerja jam (merah) + Kerja piece rated (biru)">
-          {company.durationByOperator.length === 0 ? (
+          {company.durationByMachine.length === 0 ? (
             <Hint>No hours recorded yet.</Hint>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {company.durationByOperator.map((o) => (
-                <StackedAreaChart key={o.operatorId} title={o.name} unit="jam" series={o.series} />
+              {company.durationByMachine.map((o) => (
+                <StackedAreaChart key={o.machineId} title={o.name} unit="jam" series={o.series} />
               ))}
             </div>
           )}

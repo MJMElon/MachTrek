@@ -127,10 +127,10 @@ export default function CompleteTask() {
     () => (companies || []).find((c) => c.id === machine?.companyId) || null,
     [companies, machine]
   )
-  // "Kerja jam" (operator hourly rate) is offered alongside the machine's rates.
+  // "Kerja jam" (machine hourly rate) is offered alongside the machine's rates.
   const rateOptions = useMemo(
-    () => (machineId ? [kerjaJamRate(operator), ...(rates || [])] : []),
-    [machineId, operator, rates]
+    () => (machineId ? [kerjaJamRate(machine), ...(rates || [])] : []),
+    [machineId, machine, rates]
   )
   const rate = useMemo(() => rateOptions.find((r) => r.id === rateId) || null, [rateOptions, rateId])
   const area = useMemo(() => (areas || []).find((a) => a.id === areaId) || null, [areas, areaId])

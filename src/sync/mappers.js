@@ -194,6 +194,7 @@ export function toServerMachine(m) {
     name: m.name,
     pin_hash: m.pinHash ?? null,
     active: m.active,
+    hourly_rate: m.hourlyRate ?? null,
     updated_at: m.updatedAt
   }
 }
@@ -204,6 +205,7 @@ export function fromServerMachine(r) {
     name: r.name,
     pinHash: r.pin_hash ?? null,
     active: r.active,
+    hourlyRate: r.hourly_rate ?? null,
     updatedAt: r.updated_at,
     syncStatus: SyncStatus.SYNCED
   }

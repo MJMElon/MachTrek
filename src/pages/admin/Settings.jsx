@@ -5,6 +5,7 @@ import { getMeta } from '../../db/database.js'
 import { formatMoney, formatRate } from '../../lib/format.js'
 import { parseGeoFile, countPoints } from '../../lib/geofile.js'
 import { isDistanceUnit } from '../../lib/dashboard.js'
+import { HOURLY_RATE_NAME, HOURLY_RATE_UNIT } from '../../db/models.js'
 import {
   listPieceRates,
   upsertPieceRate,
@@ -210,7 +211,7 @@ function CompanyDetail({ companyId, onBack, onOpenMachine }) {
             key={m.id}
             title={m.name}
             dim={!m.active}
-            subtitle={`Tap to set piece rates${m.active ? '' : ' · inactive'}`}
+            subtitle={`Tap to set piece & hourly rates${m.active ? '' : ' · inactive'}`}
             onClick={() => onOpenMachine(m.id)}
           />
         ))}
@@ -350,6 +351,7 @@ function MachineDetail({ companyId, machineId, onBack }) {
   const rates = useLiveQuery(() => listPieceRates({ machineId, includeInactive: true }), [machineId], [])
   const [editMachine, setEditMachine] = useState(false)
   const [rateEditing, setRateEditing] = useState(null)
+  const [editHourly, setEditHourly] = useState(false)
 
   if (machine === undefined) {
     return (
@@ -367,7 +369,7 @@ function MachineDetail({ companyId, machineId, onBack }) {
     <div className="space-y-4 pb-6">
       <PageHeader
         title={machine.name}
-        subtitle="Machine · piece rates"
+        subtitle="Machine · piece & hourly rates"
         onBack={onBack}
         right={
           <Button size="sm" variant="ghost" onClick={() => setEditMachine(true)}>
@@ -393,6 +395,25 @@ function MachineDetail({ companyId, machineId, onBack }) {
         ))}
         {rates && rates.length === 0 && <p className="text-sm text-slate-500">No piece rates yet.</p>}
       </SectionCard>
+
+      <SectionCard title="Hourly rate">
+        <ListRow
+          title={HOURLY_RATE_NAME}
+          subtitle={
+            Number(machine.hourlyRate) > 0
+              ? `${formatRate(machine.hourlyRate, CURRENCY)} / ${HOURLY_RATE_UNIT}`
+              : 'Not set — tap to key in RM/jam'
+          }
+          onClick={() => setEditHourly(true)}
+        />
+      </SectionCard>
+
+      <HourlyRateEditor
+        key={editHourly ? 'hourly-open' : 'hourly-closed'}
+        open={editHourly}
+        machine={machine}
+        onClose={() => setEditHourly(false)}
+      />
 
       <MachineEditor
         key={editMachine ? 'edit' : 'closed'}
@@ -508,6 +529,30 @@ function CompanyEditor({ editing, onClose, onDeleted }) {
   )
 }
 
+// The machine's hourly rate ("Kerja jam"): offered as work when recording a
+// task on this machine, and the "old" side of the dashboard comparison.
+function HourlyRateEditor({ open, machine, onClose }) {
+  const [rate, setRate] = useState(machine?.hourlyRate ?? '')
+
+  async function save() {
+    await upsertMachine({ ...machine, hourlyRate: rate === '' ? null : rate })
+    onClose()
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Hourly rate">
+      <div className="space-y-3">
+        <Field label={`${HOURLY_RATE_NAME} (${CURRENCY}/${HOURLY_RATE_UNIT})`} hint="Selectable as work on this machine + drives the dashboard comparison">
+          <NumberInput value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0.00" autoFocus />
+        </Field>
+        <Button full onClick={save}>
+          Save
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 function MachineEditor({ editing, companyId, onClose, onDeleted }) {
   const isNew = editing === 'new'
   const item = isNew ? null : editing
@@ -564,7 +609,6 @@ function OperatorEditor({ editing, companyId, machines, onClose }) {
   const [basicSalary, setBasicSalary] = useState(item?.basicSalary ?? '')
   const [phoneAllowance, setPhoneAllowance] = useState(item?.phoneAllowance ?? '')
   const [dieselSubsidy, setDieselSubsidy] = useState(item?.dieselSubsidy ?? '')
-  const [hourlyRate, setHourlyRate] = useState(item?.hourlyRate ?? '')
   const [forceLogout, setForceLogout] = useState(false)
   const [error, setError] = useState('')
 
@@ -591,7 +635,6 @@ function OperatorEditor({ editing, companyId, machines, onClose }) {
         basicSalary: basicSalary === '' ? null : basicSalary,
         phoneAllowance: phoneAllowance === '' ? null : phoneAllowance,
         dieselSubsidy: dieselSubsidy === '' ? null : dieselSubsidy,
-        hourlyRate: hourlyRate === '' ? null : hourlyRate,
         machineIds: validIds,
         forceLogout
       })
@@ -649,9 +692,6 @@ function OperatorEditor({ editing, companyId, machines, onClose }) {
             <NumberInput value={dieselSubsidy} onChange={(e) => setDieselSubsidy(e.target.value)} placeholder="0.00" />
           </Field>
         </div>
-        <Field label="Kerja jam" hint="Hourly rate (RM/jam) — selectable as a piece rate + drives the dashboard comparison">
-          <NumberInput value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} placeholder="0.00" />
-        </Field>
         <div>
           <p className="mb-1 text-sm font-medium text-slate-700">Machines this operator can use</p>
           <div className="max-h-48 space-y-1 overflow-auto rounded-lg border border-slate-200 p-2">

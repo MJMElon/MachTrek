@@ -161,10 +161,10 @@ export default function EditTask() {
     () => (operators || []).find((o) => o.id === f?.operatorId) || null,
     [operators, f?.operatorId]
   )
-  // "Kerja jam" (the operator's hourly rate) is offered with the machine's rates.
+  // "Kerja jam" (the machine's hourly rate) is offered with the machine's rates.
   const rateOptions = useMemo(
-    () => (f?.machineId ? [kerjaJamRate(selectedOperator), ...(rates || [])] : []),
-    [f?.machineId, selectedOperator, rates]
+    () => (f?.machineId ? [kerjaJamRate((machines || []).find((m) => m.id === f.machineId)), ...(rates || [])] : []),
+    [f?.machineId, machines, rates]
   )
   const rate = useMemo(() => rateOptions.find((r) => r.id === f?.rateId) || null, [rateOptions, f?.rateId])
   // Limit to the machines assigned to this operator in Settings (their ticked
@@ -490,7 +490,7 @@ export default function EditTask() {
 
         <Card className="mt-2 space-y-4 p-4">
           <h3 className="text-sm font-semibold text-slate-800">Work & rate</h3>
-          <Field label="Piece rate" hint={f.machineId ? undefined : 'Choose a machine first'}>
+          <Field label="Work" hint={f.machineId ? undefined : 'Choose a machine first'}>
             <Select
               value={f.rateId}
               onChange={(e) => {
