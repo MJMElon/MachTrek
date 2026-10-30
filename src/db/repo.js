@@ -927,6 +927,8 @@ export async function upsertMachine(input) {
     active: input.active !== false,
     // RM/jam for "Kerja jam" work on this machine + the dashboard's old-vs-new comparison.
     hourlyRate: input.hourlyRate !== undefined ? numOrNull(input.hourlyRate) : existing?.hourlyRate ?? null,
+    // Unticked machines are left out of the dashboard charts (default: shown).
+    showOnDashboard: (input.showOnDashboard ?? existing?.showOnDashboard) !== false,
     updatedAt: now,
     syncStatus: SyncStatus.PENDING
   }

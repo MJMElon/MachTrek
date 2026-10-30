@@ -60,6 +60,7 @@ export function buildDashboard({ tasks = [], machines = [], companies = [], year
   // Machines grouped by company.
   const machinesByCompany = new Map()
   for (const m of machines) {
+    if (m.showOnDashboard === false) continue
     const cid = m.companyId || 'none'
     if (!machinesByCompany.has(cid)) machinesByCompany.set(cid, [])
     machinesByCompany.get(cid).push(m)

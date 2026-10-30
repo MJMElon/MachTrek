@@ -559,11 +559,12 @@ function MachineEditor({ editing, companyId, onClose, onDeleted }) {
   const open = editing != null
   const [name, setName] = useState(item?.name || '')
   const [active, setActive] = useState(item?.active !== false)
+  const [showOnDashboard, setShowOnDashboard] = useState(item?.showOnDashboard !== false)
   const [error, setError] = useState('')
 
   async function save() {
     if (!name.trim()) return setError('Enter a machine name.')
-    await upsertMachine({ id: item?.id, companyId, name, active })
+    await upsertMachine({ id: item?.id, companyId, name, active, showOnDashboard })
     onClose()
   }
   async function remove() {
@@ -582,6 +583,10 @@ function MachineEditor({ editing, companyId, onClose, onDeleted }) {
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
           Active
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" checked={showOnDashboard} onChange={(e) => setShowOnDashboard(e.target.checked)} />
+          Show on dashboard
         </label>
         <Button full onClick={save}>
           Save

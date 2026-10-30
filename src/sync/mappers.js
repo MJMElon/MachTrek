@@ -195,6 +195,7 @@ export function toServerMachine(m) {
     pin_hash: m.pinHash ?? null,
     active: m.active,
     hourly_rate: m.hourlyRate ?? null,
+    show_on_dashboard: m.showOnDashboard !== false,
     updated_at: m.updatedAt
   }
 }
@@ -206,6 +207,7 @@ export function fromServerMachine(r) {
     pinHash: r.pin_hash ?? null,
     active: r.active,
     hourlyRate: r.hourly_rate ?? null,
+    showOnDashboard: r.show_on_dashboard !== false,
     updatedAt: r.updated_at,
     syncStatus: SyncStatus.SYNCED
   }
